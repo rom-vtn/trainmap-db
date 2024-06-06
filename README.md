@@ -16,8 +16,8 @@ Go Module to:
 - Write tests
 
 # Examples
-- https://github.com/rom-vtn/trainmap_api (an API using this package to answer queries using a given database) [TODO: not actually published, gotta fix]
-- https://github.com/rom-vtn/trainmap_loader (a loader which generates a database using a config file containing URLs to GTFS feeds) [TODO: not actually published either]
+- https://github.com/rom-vtn/trainmap-api (an API using this package to answer queries using a given database)
+- https://github.com/rom-vtn/trainmap-loader (a loader which generates a database using a config file containing URLs to GTFS feeds)
 
 # See also
 - https://github.com/jarondl/pygtfs (inspiration for the package)
