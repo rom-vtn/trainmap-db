@@ -262,7 +262,9 @@ func calculateServiceDays(db *MutexedDB, calendars []Calendar, calendarDates []C
 }
 
 type LoaderConfig struct {
-	Contents []LoaderConfigEntry `json:"contents"`
+	DatabasePath string              `json:"db_path"`
+	ConfigPath   string              `json:"config_path"`
+	Contents     []LoaderConfigEntry `json:"contents"`
 }
 
 type LoaderConfigEntry struct {
