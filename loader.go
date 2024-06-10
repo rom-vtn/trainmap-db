@@ -60,7 +60,6 @@ func readCsv[T any](zipFile *zip.Reader, csvFileName string) ([]T, error) {
 func parseCalendarDates(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusServiceIds map[string]bool) ([]CalendarDate, error) {
 	calendarDates, err := readCsv[CalendarDate](zipFile, "calendar_dates.txt")
 	if err != nil {
-		// log.Default().Println("Got error while reading calendar_dates.txt, not fatal: ", err.Error())
 		return []CalendarDate{}, nil
 	}
 	nonBusCalendarDates := make([]CalendarDate, 0, len(calendarDates))
@@ -82,7 +81,6 @@ func parseCalendarDates(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBu
 func parseCalendar(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusServiceIds map[string]bool) ([]Calendar, error) {
 	calendars, err := readCsv[Calendar](zipFile, "calendar.txt")
 	if err != nil {
-		// log.Default().Println("Got error while reading calendar.txt, not fatal: ", err.Error())
 		return []Calendar{}, nil
 	}
 	nonBusCalendars := make([]Calendar, 0, len(calendars))
@@ -128,7 +126,7 @@ func parseStops(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusStopIds
 }
 
 // returns (nonBusTripIds, nonBusServiceIds, err)
-func parseTrips(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusRouteIds map[string]bool) (map[string]bool, map[string]bool, error) {
+func parseTrips(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusRouteIds map[string]bool) (validTripIds map[string]bool, validServiceIds map[string]bool, err error) {
 	trips, err := readCsv[Trip](zipFile, "trips.txt")
 	if err != nil {
 		return nil, nil, err
@@ -368,12 +366,6 @@ func processFeed(feedId string, mutexedDb *MutexedDB, configEntry LoaderConfigEn
 	if err != nil {
 		return err
 	}
-
-	// err = os.WriteFile(feedFileName, content, fs.ModeAppend)
-	// if err != nil {
-	// 	println("ERR WHILE WRITING")
-	// 	return err
-	// }
 
 	log.Default().Printf("[%s] Done downloading file, starting parsing...\n", configEntry.DisplayName)
 
