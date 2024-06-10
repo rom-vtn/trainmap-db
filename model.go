@@ -65,7 +65,7 @@ func trimAndParseFloat(s string) (float64, error) {
 	trimmed := strings.Trim(s, " ")
 	val, err := strconv.ParseFloat(trimmed, 64)
 	if err != nil {
-		return 0, nil
+		return 0, err
 	}
 	return val, nil
 }
