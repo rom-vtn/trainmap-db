@@ -109,7 +109,6 @@ func (f Fetcher) GetFeed(feedId string) (Feed, error) {
 	return feed, err
 }
 
-// WARN: this uses fields populated by the geo_optimize, make sure it do got run beforehand
 func (f Fetcher) GetTripsContaining(pt Point) ([]Trip, error) {
 	var trips, tripBatch []Trip
 	const batchSize int = 1000
