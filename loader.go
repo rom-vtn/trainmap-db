@@ -57,15 +57,15 @@ func readCsv[T any](zipFile *zip.Reader, csvFileName string) ([]T, error) {
 	return content, nil
 }
 
-func parseCalendarDates(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusServiceIds map[string]bool) ([]CalendarDate, error) {
+func parseCalendarDates(zipFile *zip.Reader, db *MutexedDB, feedId string, validServiceIds map[string]bool) ([]CalendarDate, error) {
 	calendarDates, err := readCsv[CalendarDate](zipFile, "calendar_dates.txt")
 	if err != nil {
 		//NOTE: not a reason to forward the error, GTFS spec allows for no calendar dates
 		return []CalendarDate{}, nil
 	}
-	nonBusCalendarDates := make([]CalendarDate, 0, len(calendarDates))
+	validCalendarDates := make([]CalendarDate, 0, len(calendarDates))
 	for i := range calendarDates {
-		if !nonBusServiceIds[calendarDates[i].ServiceId] {
+		if !validServiceIds[calendarDates[i].ServiceId] {
 			continue
 		}
 		calendarDates[i].FeedId = feedId
@@ -74,20 +74,20 @@ func parseCalendarDates(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBu
 			return nil, err
 		}
 		calendarDates[i].Date = date
-		nonBusCalendarDates = append(nonBusCalendarDates, calendarDates[i])
+		validCalendarDates = append(validCalendarDates, calendarDates[i])
 	}
-	return calendarDates, addToDB(db, nonBusCalendarDates)
+	return calendarDates, addToDB(db, validCalendarDates)
 }
 
-func parseCalendar(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusServiceIds map[string]bool) ([]Calendar, error) {
+func parseCalendar(zipFile *zip.Reader, db *MutexedDB, feedId string, validService map[string]bool) ([]Calendar, error) {
 	calendars, err := readCsv[Calendar](zipFile, "calendar.txt")
 	if err != nil {
 		//NOTE: not a reason to forward the error, GTFS spec allows for no calendars
 		return []Calendar{}, nil
 	}
-	nonBusCalendars := make([]Calendar, 0, len(calendars))
+	validCalendars := make([]Calendar, 0, len(calendars))
 	for i := range calendars {
-		if !nonBusServiceIds[calendars[i].ServiceId] {
+		if !validService[calendars[i].ServiceId] {
 			continue
 		}
 		//set feed
@@ -102,19 +102,19 @@ func parseCalendar(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusServ
 		if err != nil {
 			return nil, err
 		}
-		nonBusCalendars = append(nonBusCalendars, calendars[i])
+		validCalendars = append(validCalendars, calendars[i])
 	}
-	return nonBusCalendars, addToDB(db, nonBusCalendars)
+	return validCalendars, addToDB(db, validCalendars)
 }
 
-func parseStops(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusStopIds map[string]bool) error {
+func parseStops(zipFile *zip.Reader, db *MutexedDB, feedId string, validStopIds map[string]bool) error {
 	stops, err := readCsv[Stop](zipFile, "stops.txt")
 	if err != nil {
 		return err
 	}
-	nonBusStops := make([]Stop, 0, len(stops))
+	validStops := make([]Stop, 0, len(stops))
 	for i := range stops {
-		if !nonBusStopIds[stops[i].StopId] {
+		if !validStopIds[stops[i].StopId] {
 			continue
 		}
 		stops[i].FeedId = feedId
@@ -122,41 +122,41 @@ func parseStops(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusStopIds
 		if err != nil {
 			return err
 		}
-		nonBusStops = append(nonBusStops, stops[i])
+		validStops = append(validStops, stops[i])
 	}
-	return addToDB(db, nonBusStops)
+	return addToDB(db, validStops)
 }
 
-// returns (nonBusTripIds, nonBusServiceIds, err)
-func parseTrips(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusRouteIds map[string]bool) (validTripIds map[string]bool, validServiceIds map[string]bool, err error) {
+// returns (validTripIds, validServiceIds, err)
+func parseTrips(zipFile *zip.Reader, db *MutexedDB, feedId string, validRouteIds map[string]bool) (validTripIds map[string]bool, validServiceIds map[string]bool, err error) {
 	trips, err := readCsv[Trip](zipFile, "trips.txt")
 	if err != nil {
 		return nil, nil, err
 	}
-	nonBusTripIds := make(map[string]bool)
-	nonBusServiceIds := make(map[string]bool)
-	nonBusTrips := make([]Trip, 0, len(trips))
+	validTripIds = make(map[string]bool)
+	validServiceIds = make(map[string]bool)
+	validTrips := make([]Trip, 0, len(trips))
 	for i := range trips {
-		if _, ok := nonBusRouteIds[trips[i].RouteId]; !ok {
+		if _, ok := validRouteIds[trips[i].RouteId]; !ok {
 			continue
 		}
 		trips[i].FeedId = feedId
-		nonBusTrips = append(nonBusTrips, trips[i])
-		nonBusTripIds[trips[i].TripId] = true
-		nonBusServiceIds[trips[i].ServiceId] = true
+		validTrips = append(validTrips, trips[i])
+		validTripIds[trips[i].TripId] = true
+		validServiceIds[trips[i].ServiceId] = true
 	}
-	return nonBusTripIds, nonBusServiceIds, addToDB(db, nonBusTrips)
+	return validTripIds, validServiceIds, addToDB(db, validTrips)
 }
 
-func parseStopTimes(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusTripIds map[string]bool) (map[string]bool, error) {
+func parseStopTimes(zipFile *zip.Reader, db *MutexedDB, feedId string, validTripIds map[string]bool) (map[string]bool, error) {
 	stopTimes, err := readCsv[StopTime](zipFile, "stop_times.txt")
 	if err != nil {
 		return nil, err
 	}
-	nonBusStopTimes := make([]StopTime, 0, len(stopTimes))
-	nonBusStopIds := make(map[string]bool)
+	validStopTimes := make([]StopTime, 0, len(stopTimes))
+	validStopIds := make(map[string]bool)
 	for i := range stopTimes {
-		if _, ok := nonBusTripIds[stopTimes[i].TripId]; !ok {
+		if _, ok := validTripIds[stopTimes[i].TripId]; !ok {
 			continue
 		}
 		stopTimes[i].FeedId = feedId
@@ -164,10 +164,10 @@ func parseStopTimes(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusTri
 		if err != nil {
 			return nil, err
 		}
-		nonBusStopTimes = append(nonBusStopTimes, stopTimes[i])
-		nonBusStopIds[stopTimes[i].StopId] = true
+		validStopTimes = append(validStopTimes, stopTimes[i])
+		validStopIds[stopTimes[i].StopId] = true
 	}
-	return nonBusStopIds, addToDB(db, nonBusStopTimes)
+	return validStopIds, addToDB(db, validStopTimes)
 }
 
 func parseRoutes(zipFile *zip.Reader, db *MutexedDB, feedId string) (map[string]bool, error) {
@@ -175,16 +175,16 @@ func parseRoutes(zipFile *zip.Reader, db *MutexedDB, feedId string) (map[string]
 	if err != nil {
 		return nil, err
 	}
-	nonBusRouteIds := make(map[string]bool)
-	nonBusRoutes := make([]Route, 0, len(routes))
+	validRouteIds := make(map[string]bool)
+	validRoutes := make([]Route, 0, len(routes))
 	for i := range routes {
 		routes[i].FeedId = feedId
 		if routes[i].RouteType != RouteTypeBus {
-			nonBusRoutes = append(nonBusRoutes, routes[i])
-			nonBusRouteIds[routes[i].RouteId] = true
+			validRoutes = append(validRoutes, routes[i])
+			validRouteIds[routes[i].RouteId] = true
 		}
 	}
-	return nonBusRouteIds, addToDB(db, nonBusRoutes)
+	return validRouteIds, addToDB(db, validRoutes)
 }
 
 func parseAgencies(zipFile *zip.Reader, db *MutexedDB, feedId string) error {
@@ -376,19 +376,19 @@ func processFeed(feedId string, mutexedDb *MutexedDB, configEntry LoaderConfigEn
 	if err != nil {
 		return err
 	}
-	nonBusRouteIds, err := parseRoutes(zipFile, mutexedDb, feedId)
+	validRouteIds, err := parseRoutes(zipFile, mutexedDb, feedId)
 	if err != nil {
 		return err
 	}
-	nonBusTripIds, nonBusServiceIds, err := parseTrips(zipFile, mutexedDb, feedId, nonBusRouteIds)
+	validTripIds, validServiceIds, err := parseTrips(zipFile, mutexedDb, feedId, validRouteIds)
 	if err != nil {
 		return err
 	}
-	calendarDates, err := parseCalendarDates(zipFile, mutexedDb, feedId, nonBusServiceIds)
+	calendarDates, err := parseCalendarDates(zipFile, mutexedDb, feedId, validServiceIds)
 	if err != nil {
 		return err
 	}
-	calendar, err := parseCalendar(zipFile, mutexedDb, feedId, nonBusServiceIds)
+	calendar, err := parseCalendar(zipFile, mutexedDb, feedId, validServiceIds)
 	if err != nil {
 		return err
 	}
@@ -396,11 +396,11 @@ func processFeed(feedId string, mutexedDb *MutexedDB, configEntry LoaderConfigEn
 	if err != nil {
 		return err
 	}
-	nonBusStopIds, err := parseStopTimes(zipFile, mutexedDb, feedId, nonBusTripIds)
+	validStopIds, err := parseStopTimes(zipFile, mutexedDb, feedId, validTripIds)
 	if err != nil {
 		return err
 	}
-	err = parseStops(zipFile, mutexedDb, feedId, nonBusStopIds)
+	err = parseStops(zipFile, mutexedDb, feedId, validStopIds)
 	if err != nil {
 		return err
 	}
