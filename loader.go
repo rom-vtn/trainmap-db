@@ -60,6 +60,7 @@ func readCsv[T any](zipFile *zip.Reader, csvFileName string) ([]T, error) {
 func parseCalendarDates(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusServiceIds map[string]bool) ([]CalendarDate, error) {
 	calendarDates, err := readCsv[CalendarDate](zipFile, "calendar_dates.txt")
 	if err != nil {
+		//NOTE: not a reason to forward the error, GTFS spec allows for no calendar dates
 		return []CalendarDate{}, nil
 	}
 	nonBusCalendarDates := make([]CalendarDate, 0, len(calendarDates))
@@ -81,6 +82,7 @@ func parseCalendarDates(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBu
 func parseCalendar(zipFile *zip.Reader, db *MutexedDB, feedId string, nonBusServiceIds map[string]bool) ([]Calendar, error) {
 	calendars, err := readCsv[Calendar](zipFile, "calendar.txt")
 	if err != nil {
+		//NOTE: not a reason to forward the error, GTFS spec allows for no calendars
 		return []Calendar{}, nil
 	}
 	nonBusCalendars := make([]Calendar, 0, len(calendars))
