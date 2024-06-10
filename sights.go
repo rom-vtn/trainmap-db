@@ -136,8 +136,8 @@ func (st StopTime) getPassingTime(obsPoint Point, other StopTime) (time.Duration
 	return startTime.Add(partialTime).Sub(time.Unix(0, 0)), nil
 }
 
-// returns (dist(point, line(stationA, stationB)), dist(point, line(stationA, stationB)) / dist(stationA, stationB)). Formula from
-// from https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points
+// returns (dist(point, line(stationA, stationB)), dist(point, line(stationA, stationB)) / dist(stationA, stationB)).
+// Formula from https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points
 func (p Point) getFractionOfDistTo(stopA Stop, stopB Stop) (float64, float64) {
 	x0 := p.Lat
 	y0 := p.Lon
@@ -154,11 +154,8 @@ func (p Point) getFractionOfDistTo(stopA Stop, stopB Stop) (float64, float64) {
 }
 
 // Checks if the trip in question is a sight at the coords given.
-// Returns (*TrainSight, nil) if it's a sight.
-// Returns (nil, nil) if not a sight.
-// Returns (nil, error) on error.
-func (f Fetcher) getPossibleTrainSight(obsPoint Point, trip Trip) (TrainSight, bool, error) {
-	// first, exclude all routes that aren't heavy rail (GTFS route type = 2)
+func (f Fetcher) getPossibleTrainSight(obsPoint Point, trip Trip) (sight TrainSight, hasSight bool, err error) {
+	// first, exclude all routes that aren't rail (looking at you buses)
 	if !trip.Route.RouteType.isRailType() {
 		return TrainSight{}, false, nil
 	}
