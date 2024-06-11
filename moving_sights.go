@@ -162,15 +162,18 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip) (
 	const MOVING_KM_THRESHOLD = 15 //TODO adjust
 	var tripInterpolationPoints, referenceInterpolationPoints []InterpolationPoint
 	for _, stopTime := range referenceTrip.StopTimes {
-		//add arrival and departure for each of our reference stoptimes
-		referenceInterpolationPoints = append(referenceInterpolationPoints, InterpolationPoint{Position: stopTime.Stop.GetPoint(), Time: *stopTime.ArrivalTime})
-		referenceInterpolationPoints = append(referenceInterpolationPoints, InterpolationPoint{Position: stopTime.Stop.GetPoint(), Time: *stopTime.DepartureTime})
-		tripInterpolationPoints = append(tripInterpolationPoints, InterpolationPoint{Position: possibleTrip.getPositionAt(*stopTime.ArrivalTime), Time: *stopTime.ArrivalTime})
-		tripInterpolationPoints = append(tripInterpolationPoints, InterpolationPoint{Position: possibleTrip.getPositionAt(*stopTime.DepartureTime), Time: *stopTime.DepartureTime})
+		//add arrival and departure interpolation points for each of our reference stoptimes
+		refArrivalInterPoint := InterpolationPoint{Position: stopTime.Stop.GetPoint(), Time: *stopTime.ArrivalTime}
+		refDepartureInterPoint := InterpolationPoint{Position: stopTime.Stop.GetPoint(), Time: *stopTime.DepartureTime}
+		tripArrivalInterPoint := InterpolationPoint{Position: possibleTrip.getPositionAt(*stopTime.ArrivalTime), Time: *stopTime.ArrivalTime}
+		tripDepartureInterPoint := InterpolationPoint{Position: possibleTrip.getPositionAt(*stopTime.DepartureTime), Time: *stopTime.DepartureTime}
+		referenceInterpolationPoints = append(referenceInterpolationPoints, refArrivalInterPoint, refDepartureInterPoint)
+		tripInterpolationPoints = append(tripInterpolationPoints, tripArrivalInterPoint, tripDepartureInterPoint)
 	}
 	var previousRelativeInterPoint, lowestInterPoint InterpolationPoint
 	var currentLowestDistSquared float64
 	for i := range tripInterpolationPoints {
+		//compare distances for each stoptime
 		currentRelativeInterPoint := referenceInterpolationPoints[i].getRelativePointTo(tripInterpolationPoints[i])
 		if i != 0 {
 			closestPoint := previousRelativeInterPoint.getClosestPointWith(currentRelativeInterPoint, DEFAULT_PRECISION_DEPTH)

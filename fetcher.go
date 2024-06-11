@@ -90,7 +90,7 @@ func (f Fetcher) GetFeededServiceIdTrips(feededService FeededService) ([]Trip, e
 
 func (f Fetcher) GetTrip(feedId string, tripId string) (Trip, error) {
 	trip := Trip{FeedId: feedId, TripId: tripId}
-	err := f.db.Model(&Trip{}).Preload(clause.Associations).Preload("StopTimes.Stop").Preload("StopTimes.Trip").Where(&trip).First(&trip).Error
+	err := f.db.Model(&Trip{}).Preload(clause.Associations).Preload("Route").Preload("StopTimes.Stop").Preload("StopTimes.Trip").Where(&trip).First(&trip).Error
 	if err != nil {
 		return trip, err
 	}
