@@ -110,11 +110,45 @@ func (f Fetcher) GetFeed(feedId string) (Feed, error) {
 }
 
 func (f Fetcher) GetTripsContaining(pt Point) ([]Trip, error) {
+	// var trips, tripBatch []Trip
+	// const batchSize int = 1000
+	// batchIndex := 0
+	// for {
+	// 	err := f.db.Offset(batchSize*batchIndex).Limit(batchSize).Where("(min_lat < ?) AND (? < max_lat) AND (min_lon < ?) AND (? < max_lon)", pt.Lat+f.Config.DatabaseOutOfBoundsGraceDegrees, pt.Lat-f.Config.DatabaseOutOfBoundsGraceDegrees, pt.Lon+f.Config.DatabaseOutOfBoundsGraceDegrees, pt.Lon-f.Config.DatabaseOutOfBoundsGraceDegrees).Preload(clause.Associations).Preload("StopTimes.Stop").Find(&tripBatch).Error
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	if len(tripBatch) == 0 {
+	// 		break
+	// 	}
+	// 	trips = append(trips, tripBatch...)
+	// 	batchIndex++
+	// }
+	// return trips, nil
+	return f.GetTripsInsidePointInterval(pt, pt)
+}
+
+func (f Fetcher) GetTripsInsidePointInterval(pt1 Point, pt2 Point) ([]Trip, error) {
+	minLat := min(pt1.Lat, pt2.Lat)
+	maxLat := max(pt1.Lat, pt2.Lat)
+	minLon := min(pt1.Lon, pt2.Lon)
+	maxLon := max(pt1.Lon, pt2.Lon)
+	return f.GetTripsWithIntersection(minLat, maxLat, minLon, maxLon)
+}
+
+func (f Fetcher) GetTripsWithIntersection(minLat float64, maxLat float64, minLon float64, maxLon float64) ([]Trip, error) {
 	var trips, tripBatch []Trip
 	const batchSize int = 1000
 	batchIndex := 0
+	grace := f.Config.DatabaseOutOfBoundsGraceDegrees
 	for {
-		err := f.db.Offset(batchSize*batchIndex).Limit(batchSize).Where("(min_lat < ?) AND (? < max_lat) AND (min_lon < ?) AND (? < max_lon)", pt.Lat+f.Config.DatabaseOutOfBoundsGraceDegrees, pt.Lat-f.Config.DatabaseOutOfBoundsGraceDegrees, pt.Lon+f.Config.DatabaseOutOfBoundsGraceDegrees, pt.Lon-f.Config.DatabaseOutOfBoundsGraceDegrees).Preload(clause.Associations).Preload("StopTimes.Stop").Find(&tripBatch).Error
+		err := f.db.Offset(batchSize*batchIndex).Limit(batchSize).
+			Where("(max_lat >= ?) AND (min_lat <= ?) AND (max_lon >= ?) AND (min_lon <= ?)",
+				minLat-grace,
+				maxLat+grace,
+				minLon-grace,
+				maxLon+grace).
+			Preload(clause.Associations).Preload("StopTimes.Stop").Find(&tripBatch).Error
 		if err != nil {
 			return nil, err
 		}
