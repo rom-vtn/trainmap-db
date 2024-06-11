@@ -38,8 +38,8 @@ type Stop struct {
 	Desc            string        `csv:"stop_desc" json:"stop_desc"`
 	StopLat         float64       `json:"lat"`
 	StopLon         float64       `json:"lon"`
-	StopLatString   string        `csv:"stop_lat"`
-	StopLonString   string        `csv:"stop_lon"`
+	StopLatString   string        `csv:"stop_lat" json:"-"`
+	StopLonString   string        `csv:"stop_lon" json:"-"`
 	LocationType    *LocationType `csv:"location_type" json:"location_type"` // 0=Stop/platform, 1=Station, 2=Entrance/exit, 3=Generic, 4=Boarding area
 	ParentStationId string        `csv:"parent_station" json:"-"`
 	ParentStation   *Stop         `gorm:"foreignKey:ParentStationId,FeedId;references:StopId,FeedId" json:"parent_station"`
