@@ -17,6 +17,7 @@ func (f *Fetcher) GetSightsFromTripKey(feedId string, tripId string, date Date) 
 // NOTE: does not check if the trip is actually running on that day
 func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date) ([]RealMovingTrainSight, error) {
 	//first get the trips in the interval we want
+	const gracePeriod time.Duration = 5 * time.Minute
 	firstSt := trip.StopTimes[0]
 	lastSt := trip.StopTimes[len(trip.StopTimes)-1]
 	overlappingTrips, err := f.GetTripsInsidePointInterval(firstSt.Stop.GetPoint(), lastSt.Stop.GetPoint())
@@ -49,10 +50,16 @@ func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date) ([]RealMovingTrainSigh
 		serviceToSights[feededService] = append(serviceToSights[feededService], possibleSight)
 	}
 
-	var realMovingTrainSights []RealMovingTrainSight
+	realMovingTrainSights := make([]RealMovingTrainSight, 0)
 	for date, feededServices := range dateToServices {
 		for _, feededService := range feededServices {
 			for _, mts := range serviceToSights[feededService] {
+				sightTime := mts.PassingInterPoint.Time
+				tripDepTime := mts.Trip.StopTimes[0].DepartureTime
+				tripArrTime := mts.Trip.StopTimes[len(mts.Trip.StopTimes)-1].ArrivalTime
+				if tripDepTime.Add(-gracePeriod).After(sightTime) || tripArrTime.Add(gracePeriod).Before(sightTime) {
+					continue
+				}
 				duration := mts.PassingInterPoint.Time.Sub(time.Unix(0, 0))
 				rmts := RealMovingTrainSight{
 					MovingTrainSight: mts,
@@ -141,6 +148,7 @@ type MovingTrainSight struct {
 	Trip              Trip               `json:"trip"`
 	RouteName         string             `json:"route_name"`
 	PassingInterPoint InterpolationPoint `json:"passing_interpolation_point"`
+	Distance          float64            `json:"distance"` //distance in kilometers
 }
 
 type RealMovingTrainSight struct {
@@ -185,7 +193,8 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip) (
 		}
 		previousRelativeInterPoint = currentRelativeInterPoint
 	}
-	if lowestInterPoint.Position.getDistTo(Point{}) > MOVING_KM_THRESHOLD {
+	distanceInKm := lowestInterPoint.Position.getDistTo(Point{})
+	if distanceInKm > MOVING_KM_THRESHOLD {
 		return MovingTrainSight{}, false, nil
 	}
 
@@ -195,13 +204,15 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip) (
 
 	mts := MovingTrainSight{
 		ServiceId:         possibleTrip.ServiceId,
-		TripId:            possibleTrip.FeedId,
+		TripId:            possibleTrip.TripId,
 		FeedId:            possibleTrip.FeedId,
 		Feed:              possibleTrip.Feed,
 		FirstSt:           possibleTrip.StopTimes[0],
 		LastSt:            possibleTrip.StopTimes[len(possibleTrip.StopTimes)-1],
+		Trip:              possibleTrip,
 		RouteName:         possibleTrip.Route.RouteShortName,
 		PassingInterPoint: absInterPoint,
+		Distance:          distanceInKm,
 	}
 	return mts, true, nil
 }
