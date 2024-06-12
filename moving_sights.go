@@ -148,7 +148,7 @@ type MovingTrainSight struct {
 	Trip              Trip               `json:"trip"`
 	RouteName         string             `json:"route_name"`
 	PassingInterPoint InterpolationPoint `json:"passing_interpolation_point"`
-	Distance          float64            `json:"distance"` //distance in kilometers
+	Distance          float64            `json:"distance_km"` //distance in kilometers
 }
 
 type RealMovingTrainSight struct {
