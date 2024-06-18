@@ -180,6 +180,7 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip) (
 	}
 	var previousRelativeInterPoint, lowestInterPoint InterpolationPoint
 	var currentLowestDistSquared float64
+	var lowestInterPointIsAtEndOfTrip bool
 	for i := range tripInterpolationPoints {
 		//compare distances for each stoptime
 		currentRelativeInterPoint := referenceInterpolationPoints[i].getRelativePointTo(tripInterpolationPoints[i])
@@ -187,8 +188,15 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip) (
 			closestPoint := previousRelativeInterPoint.getClosestPointWith(currentRelativeInterPoint, DEFAULT_PRECISION_DEPTH)
 			currentDistSquared := closestPoint.getAbsDistSquared()
 			if currentLowestDistSquared == 0.0 || currentDistSquared < currentLowestDistSquared {
-				currentLowestDistSquared = currentDistSquared
-				lowestInterPoint = closestPoint
+				//check if ref trip has reached destination (if not moving in an hour)
+				ONE_HOUR := time.Hour
+				//moving sights have priority over stationary ones, even though stationary sights may be closer
+				possibleTripIsAtEnd := possibleTrip.getPositionAt(closestPoint.Time) == possibleTrip.getPositionAt(closestPoint.Time.Add(ONE_HOUR))
+				if lowestInterPointIsAtEndOfTrip || !possibleTripIsAtEnd {
+					currentLowestDistSquared = currentDistSquared
+					lowestInterPoint = closestPoint
+					lowestInterPointIsAtEndOfTrip = possibleTripIsAtEnd
+				}
 			}
 		}
 		previousRelativeInterPoint = currentRelativeInterPoint
