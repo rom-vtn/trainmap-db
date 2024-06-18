@@ -168,28 +168,70 @@ func (rmts *RealMovingTrainSight) updateInnerDates() {
 func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip) (MovingTrainSight, bool, error) {
 	const DEFAULT_PRECISION_DEPTH int = 10
 	const MOVING_KM_THRESHOLD = 15 //TODO adjust
-	var tripInterpolationPoints, referenceInterpolationPoints []InterpolationPoint
-	for _, stopTime := range referenceTrip.StopTimes {
-		//add arrival and departure interpolation points for each of our reference stoptimes
-		refArrivalInterPoint := InterpolationPoint{Position: stopTime.Stop.GetPoint(), Time: *stopTime.ArrivalTime}
-		refDepartureInterPoint := InterpolationPoint{Position: stopTime.Stop.GetPoint(), Time: *stopTime.DepartureTime}
-		tripArrivalInterPoint := InterpolationPoint{Position: possibleTrip.getPositionAt(*stopTime.ArrivalTime), Time: *stopTime.ArrivalTime}
-		tripDepartureInterPoint := InterpolationPoint{Position: possibleTrip.getPositionAt(*stopTime.DepartureTime), Time: *stopTime.DepartureTime}
-		referenceInterpolationPoints = append(referenceInterpolationPoints, refArrivalInterPoint, refDepartureInterPoint)
-		tripInterpolationPoints = append(tripInterpolationPoints, tripArrivalInterPoint, tripDepartureInterPoint)
+	const ONE_HOUR = time.Hour
+	const TIME_GRACE = 5 * time.Minute
+
+	//basic exclusion criteria (if no time overlap)
+	refTripMinTime := *referenceTrip.StopTimes[0].DepartureTime
+	refTripMaxTime := *referenceTrip.StopTimes[len(referenceTrip.StopTimes)-1].ArrivalTime
+	possibleTripMinTime := *possibleTrip.StopTimes[0].DepartureTime
+	possibleTripMaxTime := *possibleTrip.StopTimes[len(possibleTrip.StopTimes)-1].ArrivalTime
+	if refTripMaxTime.Add(TIME_GRACE).Before(possibleTripMinTime) || possibleTripMaxTime.Add(TIME_GRACE).Before(refTripMinTime) {
+		return MovingTrainSight{}, false, nil
 	}
-	var previousRelativeInterPoint, lowestInterPoint InterpolationPoint
-	var currentLowestDistSquared float64
-	var lowestInterPointIsAtEndOfTrip bool
-	for i := range tripInterpolationPoints {
-		//compare distances for each stoptime
-		currentRelativeInterPoint := referenceInterpolationPoints[i].getRelativePointTo(tripInterpolationPoints[i])
+
+	//get all possible time points from both trips
+	allRefTimesMap := make(map[time.Time]bool)
+	for _, stopTime := range referenceTrip.StopTimes {
+		allRefTimesMap[*stopTime.ArrivalTime] = true
+		allRefTimesMap[*stopTime.DepartureTime] = true
+	}
+	for _, stopTime := range possibleTrip.StopTimes {
+		allRefTimesMap[*stopTime.ArrivalTime] = true
+		allRefTimesMap[*stopTime.DepartureTime] = true
+	}
+	//get them into an array, sorted ascending
+	var allRefTimes []time.Time
+	for time := range allRefTimesMap {
+		allRefTimes = append(allRefTimes, time)
+	}
+	sort.Slice(allRefTimes, func(i, j int) bool {
+		return allRefTimes[i].Before(allRefTimes[j])
+	})
+
+	type interPointSet struct {
+		possibleTripInterPoint InterpolationPoint
+		refTripInterPoint      InterpolationPoint
+		relativeInterPoint     InterpolationPoint
+	}
+
+	//start iterating to get closest point
+	var (
+		previousSet                   interPointSet
+		currentLowestDistSquared      float64
+		lowestInterPointIsAtEndOfTrip bool
+		lowestInterPoint              InterpolationPoint
+	)
+	for i, time := range allRefTimes {
+		//build the interpolation points
+		possibleTripInterPoint := InterpolationPoint{Time: time, Position: possibleTrip.getPositionAt(time)}
+		refTripInterPoint := InterpolationPoint{Time: time, Position: referenceTrip.getPositionAt(time)}
+		relativeInterPoint := possibleTripInterPoint.getRelativePointTo(refTripInterPoint)
+		currentSet := interPointSet{
+			possibleTripInterPoint: possibleTripInterPoint,
+			refTripInterPoint:      refTripInterPoint,
+			relativeInterPoint:     relativeInterPoint,
+		}
 		if i != 0 {
-			closestPoint := previousRelativeInterPoint.getClosestPointWith(currentRelativeInterPoint, DEFAULT_PRECISION_DEPTH)
+			//exclude times outside our trip's grace period
+			if time.Add(TIME_GRACE).Before(refTripMinTime) || refTripMaxTime.Add(TIME_GRACE).Before(time) {
+				continue
+			}
+			//do the actual math
+			closestPoint := relativeInterPoint.getClosestPointWith(previousSet.relativeInterPoint, DEFAULT_PRECISION_DEPTH)
 			currentDistSquared := closestPoint.getAbsDistSquared()
 			if currentLowestDistSquared == 0.0 || currentDistSquared < currentLowestDistSquared {
 				//check if ref trip has reached destination (if not moving in an hour)
-				ONE_HOUR := time.Hour
 				//moving sights have priority over stationary ones, even though stationary sights may be closer
 				possibleTripIsAtEnd := possibleTrip.getPositionAt(closestPoint.Time) == possibleTrip.getPositionAt(closestPoint.Time.Add(ONE_HOUR))
 				if lowestInterPointIsAtEndOfTrip || !possibleTripIsAtEnd {
@@ -199,8 +241,10 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip) (
 				}
 			}
 		}
-		previousRelativeInterPoint = currentRelativeInterPoint
+		//store current interpolation points as previous
+		previousSet = currentSet
 	}
+
 	distanceInKm := lowestInterPoint.Position.getDistTo(Point{})
 	if distanceInKm > MOVING_KM_THRESHOLD {
 		return MovingTrainSight{}, false, nil
