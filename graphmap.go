@@ -193,6 +193,14 @@ func NewNetworkMapFromLocation(f Fetcher, point Point) (*NetworkMap, error) {
 	return NewNetworkMapFromTrips(trips)
 }
 
+func NewNetworkMapFromPointBox(f Fetcher, pt1, pt2 Point) (*NetworkMap, error) {
+	trips, err := f.GetTripsInsidePointInterval(pt1, pt2)
+	if err != nil {
+		return nil, err
+	}
+	return NewNetworkMapFromTrips(trips)
+}
+
 // adds a stop to the network map if it doesn't already exist
 func (nm *NetworkMap) EnsureCloseStopInGraph(stop Stop) (feededStopId, error) {
 	//if contained, return assigned parent stop

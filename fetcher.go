@@ -146,12 +146,16 @@ func (f Fetcher) GetTripsContaining(pt Point) ([]Trip, error) {
 	return f.GetTripsInsidePointInterval(pt, pt)
 }
 
+func pointsToBoundingBox(pt1, pt2 Point) (minLat, minLon, maxLat, maxLon float64) {
+	minLat = min(pt1.Lat, pt2.Lat)
+	maxLat = max(pt1.Lat, pt2.Lat)
+	minLon = min(pt1.Lon, pt2.Lon)
+	maxLon = max(pt1.Lon, pt2.Lon)
+	return minLat, maxLat, minLon, maxLon
+}
+
 func (f Fetcher) GetTripsInsidePointInterval(pt1 Point, pt2 Point) ([]Trip, error) {
-	minLat := min(pt1.Lat, pt2.Lat)
-	maxLat := max(pt1.Lat, pt2.Lat)
-	minLon := min(pt1.Lon, pt2.Lon)
-	maxLon := max(pt1.Lon, pt2.Lon)
-	return f.GetTripsWithIntersection(minLat, maxLat, minLon, maxLon)
+	return f.GetTripsWithIntersection(pointsToBoundingBox(pt1, pt2))
 }
 
 func (f Fetcher) GetTripsWithIntersection(minLat float64, maxLat float64, minLon float64, maxLon float64) ([]Trip, error) {
