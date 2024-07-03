@@ -53,6 +53,24 @@ func NewFetcher(dbFileName string, config *FetcherConfig) (*Fetcher, error) {
 	return &Fetcher{db: db, Config: fetcherConfig}, nil
 }
 
+func (f Fetcher) GetAllTrips() ([]Trip, error) {
+	var trips, tripBatch []Trip
+	const BATCH_SIZE int = 1000
+	batchIndex := 0
+	for {
+		err := f.db.Offset(BATCH_SIZE * batchIndex).Limit(BATCH_SIZE).Preload(clause.Associations).Preload("StopTimes.Stop").Find(&tripBatch).Error
+		if err != nil {
+			return nil, err
+		}
+		if len(tripBatch) == 0 {
+			break
+		}
+		trips = append(trips, tripBatch...)
+		batchIndex++
+	}
+	return trips, nil
+}
+
 func (f Fetcher) GetAllStops() ([]Stop, error) {
 	var stops []Stop
 	err := f.db.Model(&Stop{}).Preload(clause.Associations).Find(&stops).Error
