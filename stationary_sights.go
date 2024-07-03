@@ -3,11 +3,9 @@ package trainmapdb
 import (
 	"fmt"
 	"math"
-	"os"
 	"sort"
 	"time"
 
-	"github.com/dominikbraun/graph/draw"
 	"github.com/jftuga/geodist"
 )
 
@@ -253,10 +251,6 @@ func (f Fetcher) GetRealTrainSights(obsPoint Point, startDate Date, endDate Date
 	if err != nil {
 		return nil, err
 	}
-	//DEBUG
-	fmt.Printf("nm: %v\n", nm)
-	file, _ := os.Create("my-graph.gv")
-	_ = draw.DOT(nm.Graph, file)
 
 	serviceToSights := make(map[FeededService][]TrainSight)
 	for _, possibleTrip := range possibleTrips {
