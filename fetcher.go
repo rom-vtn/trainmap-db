@@ -128,21 +128,6 @@ func (f Fetcher) GetFeed(feedId string) (Feed, error) {
 }
 
 func (f Fetcher) GetTripsContaining(pt Point) ([]Trip, error) {
-	// var trips, tripBatch []Trip
-	// const batchSize int = 1000
-	// batchIndex := 0
-	// for {
-	// 	err := f.db.Offset(batchSize*batchIndex).Limit(batchSize).Where("(min_lat < ?) AND (? < max_lat) AND (min_lon < ?) AND (? < max_lon)", pt.Lat+f.Config.DatabaseOutOfBoundsGraceDegrees, pt.Lat-f.Config.DatabaseOutOfBoundsGraceDegrees, pt.Lon+f.Config.DatabaseOutOfBoundsGraceDegrees, pt.Lon-f.Config.DatabaseOutOfBoundsGraceDegrees).Preload(clause.Associations).Preload("StopTimes.Stop").Find(&tripBatch).Error
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	if len(tripBatch) == 0 {
-	// 		break
-	// 	}
-	// 	trips = append(trips, tripBatch...)
-	// 	batchIndex++
-	// }
-	// return trips, nil
 	return f.GetTripsInsidePointInterval(pt, pt)
 }
 

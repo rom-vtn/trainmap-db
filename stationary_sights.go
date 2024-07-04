@@ -33,11 +33,6 @@ type TrainSight struct {
 	Trip        Trip     `json:"trip"`
 	RouteName   string   `json:"route_name"`
 	passingTime time.Duration
-	//DEBUG
-	HasBearing   *bool `json:"has_bearing"`
-	HasAbsolute  bool  `json:"has_absolute"`
-	HasRelative  bool  `json:"has_relative"`
-	HasCloseStop bool  `json:"has_close_stop"`
 }
 
 type RealTrainSight struct {
