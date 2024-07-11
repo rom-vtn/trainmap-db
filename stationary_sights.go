@@ -3,8 +3,11 @@ package trainmapdb
 import (
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"time"
+
+	"github.com/dominikbraun/graph/draw"
 
 	"github.com/jftuga/geodist"
 )
@@ -155,6 +158,7 @@ func (f *Fetcher) getPossibleTrainSight(nm *NetworkMap, obsPoint Point, trip Tri
 		return TrainSight{}, false, nil
 	}
 
+	var hasCloseStop bool
 	var stBefore StopTime
 	segments := trip.getSegments()
 	for i, stopTime := range trip.StopTimes {
@@ -171,6 +175,8 @@ func (f *Fetcher) getPossibleTrainSight(nm *NetworkMap, obsPoint Point, trip Tri
 			for _, seg := range trajectory {
 				trajectoryTotalTime += seg.travelTime
 			}
+			//handle source once if we're at the very start
+			hasCloseStop = trajectory[0].source.GetPoint().getDistTo(obsPoint) < f.Config.CloseHeavyRailStationThreshold
 			for i, seg := range trajectory {
 				if trajectoryTotalTime == 0 {
 					trajectory[i].travelTime = 0
@@ -182,7 +188,9 @@ func (f *Fetcher) getPossibleTrainSight(nm *NetworkMap, obsPoint Point, trip Tri
 				startBearing := startPoint.GetBearingFrom(obsPoint)
 				endBearing := endPoint.GetBearingFrom(obsPoint)
 				// min threshold (be gracious for now)
-				if !endBearing.isDiffLessThan(startBearing, f.Config.BearingMaxThreshold) {
+				hasCloseStop = hasCloseStop || seg.target.GetPoint().getDistTo(obsPoint) < f.Config.CloseHeavyRailStationThreshold
+				hasBearing := !endBearing.isDiffLessThan(startBearing, f.Config.BearingMaxThreshold)
+				if hasBearing || hasCloseStop {
 					fmt.Printf("OK: %s -> %s on segment %s -> %s (%f -> %f) = %f\n", stBefore.Stop.StopName, stopTime.Stop.StopName, seg.source.StopName, seg.target.StopName, math.Mod(float64(startBearing*180/math.Pi), 360), math.Mod(float64(endBearing*180/math.Pi), 360), math.Mod(float64((endBearing-startBearing)*180/math.Pi), 360))
 					passingTime, err := stBefore.getPassingTime(obsPoint, stopTime)
 					if err != nil {
@@ -246,6 +254,9 @@ func (f Fetcher) GetRealTrainSights(obsPoint Point, startDate Date, endDate Date
 	if err != nil {
 		return nil, err
 	}
+
+	file, _ := os.Create("my-graph.gv")
+	draw.DOT(nm.Graph, file)
 
 	serviceToSights := make(map[FeededService][]TrainSight)
 	for _, possibleTrip := range possibleTrips {

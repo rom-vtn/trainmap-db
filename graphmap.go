@@ -207,7 +207,7 @@ func (nm *NetworkMap) EnsureCloseStopInGraph(stop Stop) (feededStopId, error) {
 	if nm.Contains(stop) {
 		return nm.CityAssociations[nm.CityAssociations[stop.getFeededStopId()]], nil
 	}
-	const DIST_THRESHOLD = 0.5 //in km
+	const DIST_THRESHOLD = 0.8 //in km
 	//if not contained, check for close stops and add association
 	for _, parentStop := range nm.ParentStops {
 		if stop.GetPoint().getDistTo(parentStop.GetPoint()) < DIST_THRESHOLD {
@@ -349,7 +349,7 @@ func (nm *NetworkMap) processSegment(seg segment) error {
 
 	ourWeight := int(seg.travelTime)
 
-	const PATH_THRESHOLD_FACTOR = 1.5
+	const PATH_THRESHOLD_FACTOR = 1.33
 	// if our path is way longer than this one, then just make a new edge
 	if float64(ourWeight)*PATH_THRESHOLD_FACTOR < float64(pathWeight) {
 		// println("--> path is too long, adding a new one")
