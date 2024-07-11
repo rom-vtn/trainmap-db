@@ -124,10 +124,17 @@ func (st StopTime) getPassingTime(obsPoint Point, other StopTime) (time.Duration
 		return time.Duration(0), err
 	}
 	totalTime := endTime.Sub(startTime)
+	totalLat := other.Stop.StopLat - st.Stop.StopLat
 	totalLon := other.Stop.StopLon - st.Stop.StopLon
 
+	partialLat := obsPoint.Lat - st.Stop.StopLat
 	partialLon := obsPoint.Lon - st.Stop.StopLon
-	proportion := partialLon / totalLon
+	latProportion := partialLat / totalLat
+	lonProportion := partialLon / totalLon
+	proportion := lonProportion
+	if lonProportion < 0 || lonProportion > 1 {
+		proportion = latProportion
+	}
 
 	partialTime := time.Duration(int64(float64(totalTime) * proportion))
 
