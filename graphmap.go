@@ -349,7 +349,7 @@ func (nm *NetworkMap) processSegment(seg segment) error {
 
 	ourWeight := int(seg.travelTime)
 
-	const PATH_THRESHOLD_FACTOR = 1.33
+	const PATH_THRESHOLD_FACTOR = 1.66
 	// if our path is way longer than this one, then just make a new edge
 	if float64(ourWeight)*PATH_THRESHOLD_FACTOR < float64(pathWeight) {
 		// println("--> path is too long, adding a new one")
