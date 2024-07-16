@@ -183,10 +183,7 @@ func NewNetworkMapFromRouteTypes(trips []Trip, routeType RouteType) (*NetworkMap
 }
 
 func NewNetworkMapFromLocation(f Fetcher, point Point) (*NetworkMap, error) {
-	const DEGREE_GRACE = 0.009 * 20 //stuffies around
-	minPoint := Point{Lat: point.Lat - DEGREE_GRACE, Lon: point.Lon - DEGREE_GRACE}
-	maxPoint := Point{Lat: point.Lat + DEGREE_GRACE, Lon: point.Lon + DEGREE_GRACE}
-	trips, err := f.GetTripsInsidePointInterval(minPoint, maxPoint)
+	trips, err := f.GetTripsInsidePointInterval(point, point)
 	if err != nil {
 		return nil, err
 	}

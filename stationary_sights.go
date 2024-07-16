@@ -165,10 +165,10 @@ func (f *Fetcher) getPossibleTrainSight(nm *NetworkMap, obsPoint Point, trip Tri
 		return TrainSight{}, false, nil
 	}
 
-	var hasCloseStop bool
 	var stBefore StopTime
 	segments := trip.getSegments()
 	for i, stopTime := range trip.StopTimes {
+		hasCloseStop := stopTime.Stop.GetPoint().getDistTo(obsPoint) < f.Config.CloseHeavyRailStationThreshold
 		// if not first, check diffs
 		if i != 0 {
 			//compute segments
@@ -183,7 +183,7 @@ func (f *Fetcher) getPossibleTrainSight(nm *NetworkMap, obsPoint Point, trip Tri
 				trajectoryTotalTime += seg.travelTime
 			}
 			//handle source once if we're at the very start
-			hasCloseStop = trajectory[0].source.GetPoint().getDistTo(obsPoint) < f.Config.CloseHeavyRailStationThreshold
+			hasCloseStop = hasCloseStop || trajectory[0].source.GetPoint().getDistTo(obsPoint) < f.Config.CloseHeavyRailStationThreshold
 			for i, seg := range trajectory {
 				if trajectoryTotalTime == 0 {
 					trajectory[i].travelTime = 0
@@ -256,8 +256,20 @@ func (f Fetcher) GetRealTrainSights(obsPoint Point, startDate Date, endDate Date
 	if err != nil {
 		return nil, err
 	}
+	//DEBUG
+	//RESULTS: LOOOKUP INCLUDES OUSIDE BOUNDS
+	//hasP34 := false
+	//for _, t := range possibleTrips {
+	//	routeName := t.Route.RouteShortName
+	//	if routeName == "P34" {
+	//		hasP34 = true
+	//	}
+	//}
+	//if !hasP34 {
+	//	return nil, fmt.Errorf("NO P34 FOUND")
+	//}
 
-	nm, err := NewNetworkMapFromLocation(f, obsPoint)
+	nm, err := NewNetworkMapFromTrips(possibleTrips)
 	if err != nil {
 		return nil, err
 	}
