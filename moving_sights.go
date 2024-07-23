@@ -94,7 +94,7 @@ func (trip Trip) getPositionAt(time time.Time) Point {
 			// do the whole linear interpolation math
 			totalTime := stopTime.ArrivalTime.Sub(*stBefore.DepartureTime)
 			partialTime := time.Sub(*stBefore.DepartureTime)
-			proportion := float64(partialTime / totalTime)
+			proportion := float64(partialTime) / float64(totalTime)
 			startPoint := stBefore.Stop.GetPoint()
 			endPoint := stopTime.Stop.GetPoint()
 			partialLat := proportion * (endPoint.Lat - startPoint.Lat)
