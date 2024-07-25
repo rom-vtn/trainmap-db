@@ -267,10 +267,11 @@ type LoaderConfig struct {
 }
 
 type LoaderConfigEntry struct {
-	Active           bool   `json:"active"`
-	FeedURL          string `json:"feed_url"`
-	DatabaseFileName string `json:"db_filename"`
-	DisplayName      string `json:"display_name"`
+	Active             bool   `json:"active"`
+	FeedURL            string `json:"feed_url"`
+	FetchIntervalHours *uint  `json:"fetch_interval_hours"` //0 = always fetch, null = always rely on local file
+	DatabaseFileName   string `json:"db_filename"`
+	DisplayName        string `json:"display_name"`
 }
 
 type MutexedDB struct {
@@ -350,26 +351,75 @@ func (f Fetcher) LoadDatabase(config LoaderConfig) error {
 	return nil
 }
 
+func downloadFeed(feedURL string) ([]byte, error) {
+	// first download the feed
+	resp, err := http.DefaultClient.Get(feedURL)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("expected http 200 from %s, got %d instead", feedURL, resp.StatusCode)
+	}
+	content, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return content, nil
+}
+
+func shouldDownload(configEntry LoaderConfigEntry) (bool, error) {
+	//never download if set to null
+	if configEntry.FetchIntervalHours == nil {
+		return false, nil
+	}
+	fileName := configEntry.DatabaseFileName
+	stat, err := os.Stat(fileName)
+	//if no cache, then download
+	if os.IsNotExist(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if stat.IsDir() {
+		return false, fmt.Errorf("%s: expected a file, but path points to a directory", fileName)
+	}
+	//check how long since last modified and check interval
+	lastModifiedDuration := time.Since(stat.ModTime())
+	lastModifiedThreshold := time.Duration(*configEntry.FetchIntervalHours) * time.Hour
+	return lastModifiedDuration > lastModifiedThreshold, nil
+}
+
 func processFeed(feedId string, mutexedDb *MutexedDB, configEntry LoaderConfigEntry) error {
 	feedFileName := configEntry.DatabaseFileName
 	feedURL := configEntry.FeedURL
 
-	log.Default().Printf("[%s] Starting download of %s \n", configEntry.DisplayName, feedFileName)
-
-	// first download the feed
-	resp, err := http.DefaultClient.Get(feedURL)
+	//check if feed should be downloaded, if so download, otherwise get from local file
+	download, err := shouldDownload(configEntry)
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("expected http 200 from %s, got %d instead", feedURL, resp.StatusCode)
+	var content []byte
+	if download {
+		log.Default().Printf("[%s] Starting download of %s \n", configEntry.DisplayName, feedFileName)
+		content, err = downloadFeed(feedURL)
+		if err != nil {
+			return err
+		}
+		log.Default().Printf("[%s] Done downloading, caching to %s...", configEntry.DisplayName, feedFileName)
+		//TODO maybe 0644 isn't really ideal but who cares
+		err = os.WriteFile(feedFileName, content, 0644)
+		if err != nil {
+			return err
+		}
+		log.Default().Printf("[%s] Done caching, staring parsing...\n", configEntry.DisplayName)
+	} else {
+		log.Default().Printf("[%s] Using saved cached file at %s...\n", configEntry.DisplayName, feedFileName)
+		content, err = os.ReadFile(feedFileName)
+		if err != nil {
+			return err
+		}
 	}
-	content, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	log.Default().Printf("[%s] Done downloading file, starting parsing...\n", configEntry.DisplayName)
 
 	//then open the file
 	zipFile, err := zip.NewReader(bytes.NewReader(content), (int64)(len(content)))
