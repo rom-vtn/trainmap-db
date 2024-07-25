@@ -8,9 +8,12 @@ import (
 )
 
 type Agency struct {
-	FeedId     string `gorm:"primaryKey;index:pk_agency" json:"feed_id"`
-	AgencyId   string `gorm:"primaryKey;index:pk_agency" csv:"agency_id" json:"agency_id"`
-	AgencyName string `csv:"agency_name" json:"name"`
+	FeedId         string `gorm:"primaryKey;index:pk_agency" json:"feed_id"`
+	AgencyId       string `gorm:"primaryKey;index:pk_agency" csv:"agency_id" json:"agency_id"`
+	AgencyName     string `csv:"agency_name" json:"name"`
+	AgencyUrl      string `csv:"agency_url"`
+	AgencyTimezone string `csv:"agency_timezone"`
+	AgencyLang     string `csv:"agency_lang"`
 	//skipping the rest
 }
 
@@ -35,7 +38,8 @@ type Stop struct {
 	StopCode        string        `csv:"stop_code" json:"stop_code"`
 	StopName        string        `csv:"stop_name" json:"stop_name"`
 	TtsStopName     string        `csv:"tts_stop_name" json:"tts_stop_name"`
-	Desc            string        `csv:"stop_desc" json:"stop_desc"`
+	StopDesc        string        `csv:"stop_desc" json:"stop_desc"`
+	StopUrl         string        `csv:"stop_url" json:"stop_url"`
 	StopLat         float64       `json:"lat"`
 	StopLon         float64       `json:"lon"`
 	StopLatString   string        `csv:"stop_lat" json:"-"`
@@ -118,18 +122,29 @@ type Trip struct {
 	MaxLon float64 `gorm:"index:geo_index" json:"-"`
 }
 
+type ServiceType uint
+
+const (
+	ServiceTypeScheduled ServiceType = iota
+	ServiceTypeNotPossible
+	ServiceTypeMustPhone
+	ServiceTypeMustCoordinateWithDriver
+)
+
 type StopTime struct {
-	FeedId           string     `gorm:"primaryKey;index:pk_stoptime" json:"feed_id"`
-	TripId           string     `gorm:"primaryKey;index:pk_stoptime" csv:"trip_id" json:"trip_id"`
-	CsvArrivalTime   string     `gorm:"-:all" csv:"arrival_time" json:"-"`   //hh:mm:ss
-	CsvDepartureTime string     `gorm:"-:all" csv:"departure_time" json:"-"` //hh:mm:ss
-	ArrivalTime      *time.Time `json:"arrival_time"`
-	DepartureTime    *time.Time `json:"departure_time"`
-	StopId           string     `csv:"stop_id" json:"stop_id"`
-	Stop             *Stop      `gorm:"foreignKey:StopId,FeedId;references:StopId,FeedId" json:"stop"`
-	Trip             *Trip      `gorm:"foreignKey:TripId,FeedId;references:TripId,FeedId" json:"trip"`
-	StopSequence     int        `gorm:"primaryKey;index:pk_stoptime" csv:"stop_sequence" json:"stop_sequence"`
-	StopHeadsign     string     `csv:"stop_headsign" json:"stop_headsign"`
+	FeedId           string      `gorm:"primaryKey;index:pk_stoptime" json:"feed_id"`
+	TripId           string      `gorm:"primaryKey;index:pk_stoptime" csv:"trip_id" json:"trip_id"`
+	CsvArrivalTime   string      `gorm:"-:all" csv:"arrival_time" json:"-"`   //hh:mm:ss
+	CsvDepartureTime string      `gorm:"-:all" csv:"departure_time" json:"-"` //hh:mm:ss
+	ArrivalTime      *time.Time  `json:"arrival_time"`
+	DepartureTime    *time.Time  `json:"departure_time"`
+	StopId           string      `csv:"stop_id" json:"stop_id"`
+	Stop             *Stop       `gorm:"foreignKey:StopId,FeedId;references:StopId,FeedId" json:"stop"`
+	Trip             *Trip       `gorm:"foreignKey:TripId,FeedId;references:TripId,FeedId" json:"trip"`
+	StopSequence     uint        `gorm:"primaryKey;index:pk_stoptime" csv:"stop_sequence" json:"stop_sequence"`
+	StopHeadsign     string      `csv:"stop_headsign" json:"stop_headsign"`
+	PickupType       ServiceType `csv:"pickup_type" json:"pickup_type"`
+	DropOffType      ServiceType `csv:"pickup_type" json:"dorp_off_type"`
 }
 
 func (st *StopTime) updateDate(date time.Time) {
@@ -230,7 +245,7 @@ func (c Calendar) GetWeekdayStatus(weekday time.Weekday) bool {
 	return false
 }
 
-type ExceptionType int
+type ExceptionType uint
 
 const (
 	ExceptionTypeServiceAdded   ExceptionType = 1
