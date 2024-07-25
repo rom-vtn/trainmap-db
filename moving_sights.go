@@ -87,13 +87,13 @@ type InterpolationPoint struct {
 func (trip Trip) getPositionAt(time time.Time) Point {
 	var stBefore StopTime
 	for i, stopTime := range trip.StopTimes {
-		if time.Before(*stopTime.ArrivalTime) {
+		if time.Before(stopTime.ArrivalTime) {
 			if i == 0 {
 				return stopTime.Stop.GetPoint()
 			}
 			// do the whole linear interpolation math
-			totalTime := stopTime.ArrivalTime.Sub(*stBefore.DepartureTime)
-			partialTime := time.Sub(*stBefore.DepartureTime)
+			totalTime := stopTime.ArrivalTime.Sub(stBefore.DepartureTime)
+			partialTime := time.Sub(stBefore.DepartureTime)
 			proportion := float64(partialTime) / float64(totalTime)
 			startPoint := stBefore.Stop.GetPoint()
 			endPoint := stopTime.Stop.GetPoint()
@@ -101,7 +101,7 @@ func (trip Trip) getPositionAt(time time.Time) Point {
 			partialLon := proportion * (endPoint.Lon - startPoint.Lon)
 			return Point{Lat: startPoint.Lat + partialLat, Lon: startPoint.Lon + partialLon}
 		}
-		if time.Before(*stopTime.DepartureTime) {
+		if time.Before(stopTime.DepartureTime) {
 			return stopTime.Stop.GetPoint()
 		}
 		stBefore = stopTime
@@ -172,10 +172,10 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip) (
 	const TIME_GRACE = 5 * time.Minute
 
 	//basic exclusion criteria (if no time overlap)
-	refTripMinTime := *referenceTrip.StopTimes[0].DepartureTime
-	refTripMaxTime := *referenceTrip.StopTimes[len(referenceTrip.StopTimes)-1].ArrivalTime
-	possibleTripMinTime := *possibleTrip.StopTimes[0].DepartureTime
-	possibleTripMaxTime := *possibleTrip.StopTimes[len(possibleTrip.StopTimes)-1].ArrivalTime
+	refTripMinTime := referenceTrip.StopTimes[0].DepartureTime
+	refTripMaxTime := referenceTrip.StopTimes[len(referenceTrip.StopTimes)-1].ArrivalTime
+	possibleTripMinTime := possibleTrip.StopTimes[0].DepartureTime
+	possibleTripMaxTime := possibleTrip.StopTimes[len(possibleTrip.StopTimes)-1].ArrivalTime
 	if refTripMaxTime.Add(TIME_GRACE).Before(possibleTripMinTime) || possibleTripMaxTime.Add(TIME_GRACE).Before(refTripMinTime) {
 		return MovingTrainSight{}, false, nil
 	}
@@ -183,12 +183,12 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip) (
 	//get all possible time points from both trips
 	allRefTimesMap := make(map[time.Time]bool)
 	for _, stopTime := range referenceTrip.StopTimes {
-		allRefTimesMap[*stopTime.ArrivalTime] = true
-		allRefTimesMap[*stopTime.DepartureTime] = true
+		allRefTimesMap[stopTime.ArrivalTime] = true
+		allRefTimesMap[stopTime.DepartureTime] = true
 	}
 	for _, stopTime := range possibleTrip.StopTimes {
-		allRefTimesMap[*stopTime.ArrivalTime] = true
-		allRefTimesMap[*stopTime.DepartureTime] = true
+		allRefTimesMap[stopTime.ArrivalTime] = true
+		allRefTimesMap[stopTime.DepartureTime] = true
 	}
 	//get them into an array, sorted ascending
 	var allRefTimes []time.Time

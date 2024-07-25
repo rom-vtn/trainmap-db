@@ -400,7 +400,7 @@ func (trip Trip) getSegments() []segment {
 	var segments []segment
 	stopTimes := trip.StopTimes
 	sort.Slice(stopTimes, func(i, j int) bool {
-		return stopTimes[i].DepartureTime.Before(*stopTimes[j].DepartureTime)
+		return stopTimes[i].DepartureTime.Before(stopTimes[j].DepartureTime)
 	})
 	for i := range stopTimes {
 		if i == 0 {
@@ -408,9 +408,9 @@ func (trip Trip) getSegments() []segment {
 		}
 		sourceStopTime := stopTimes[i-1]
 		targetStopTime := stopTimes[i]
-		travelTime := targetStopTime.ArrivalTime.Sub(*sourceStopTime.DepartureTime)
+		travelTime := targetStopTime.ArrivalTime.Sub(sourceStopTime.DepartureTime)
 		if travelTime < 0 { //sanity check
-			panic(fmt.Errorf("got negative travel time: %v between %v and %v", travelTime, *sourceStopTime.DepartureTime, *targetStopTime.ArrivalTime))
+			panic(fmt.Errorf("got negative travel time: %v between %v and %v", travelTime, sourceStopTime.DepartureTime, targetStopTime.ArrivalTime))
 		}
 		seg := segment{
 			source:     *sourceStopTime.Stop,

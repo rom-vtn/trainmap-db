@@ -136,8 +136,8 @@ type StopTime struct {
 	TripId           string      `gorm:"primaryKey;index:pk_stoptime" csv:"trip_id" json:"trip_id"`
 	CsvArrivalTime   string      `gorm:"-:all" csv:"arrival_time" json:"-"`   //hh:mm:ss
 	CsvDepartureTime string      `gorm:"-:all" csv:"departure_time" json:"-"` //hh:mm:ss
-	ArrivalTime      *time.Time  `json:"arrival_time"`
-	DepartureTime    *time.Time  `json:"departure_time"`
+	ArrivalTime      time.Time   `json:"arrival_time"`
+	DepartureTime    time.Time   `json:"departure_time"`
 	StopId           string      `csv:"stop_id" json:"stop_id"`
 	Stop             *Stop       `gorm:"foreignKey:StopId,FeedId;references:StopId,FeedId" json:"stop"`
 	Trip             *Trip       `gorm:"foreignKey:TripId,FeedId;references:TripId,FeedId" json:"trip"`
@@ -148,43 +148,43 @@ type StopTime struct {
 }
 
 func (st *StopTime) updateDate(date time.Time) {
-	if st.ArrivalTime != nil {
+	if !st.ArrivalTime.IsZero() {
 		newTime := date.Add(st.ArrivalTime.Sub(time.Unix(0, 0)))
-		st.ArrivalTime = &newTime
+		st.ArrivalTime = newTime
 	}
-	if st.DepartureTime != nil {
+	if !st.DepartureTime.IsZero() {
 		newTime := date.Add(st.DepartureTime.Sub(time.Unix(0, 0)))
-		st.DepartureTime = &newTime
+		st.DepartureTime = newTime
 	}
 }
 
 // converts time as "hh:mm:ss" to a duration and returns (unix epoch + duration).
-// if timeString == "", then returns (nil, nil)
-func convertTime(timeString string) (*time.Time, error) {
+// if timeString == "", then returns (time.Time{}, nil)
+func convertTime(timeString string) (time.Time, error) {
 	//if no info given, return nil/nil
 	if timeString == "" {
-		return nil, nil
+		return time.Time{}, nil
 	}
 	//expect hh:mm:ss
 	timeSlice := strings.Split(timeString, ":")
 	if len(timeSlice) < 3 {
-		return nil, fmt.Errorf("could not split time format properly")
+		return time.Time{}, fmt.Errorf("could not split time format properly")
 	}
 	hours, err := strconv.ParseUint(timeSlice[0], 10, 64)
 	if err != nil {
-		return nil, err
+		return time.Time{}, err
 	}
 	minutes, err := strconv.ParseUint(timeSlice[1], 10, 64)
 	if err != nil {
-		return nil, err
+		return time.Time{}, err
 	}
 	seconds, err := strconv.ParseUint(timeSlice[2], 10, 64)
 	if err != nil {
-		return nil, err
+		return time.Time{}, err
 	}
 	duration := time.Duration(hours*uint64(time.Hour) + minutes*uint64(time.Minute) + seconds*uint64(time.Second))
 	absTime := time.Unix(0, 0).Add(duration)
-	return &absTime, nil
+	return absTime, nil
 }
 
 // converts the StopTime's CSV attributes and fills the departure/arrival time
@@ -198,7 +198,7 @@ func (st *StopTime) convertTimes() error {
 	if err != nil {
 		return err
 	}
-	if st.DepartureTime == nil && st.ArrivalTime == nil {
+	if st.DepartureTime.IsZero() && st.ArrivalTime.IsZero() {
 		return fmt.Errorf("StopTime has no arrival time AND no departure time")
 	}
 	return nil

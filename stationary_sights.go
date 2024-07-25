@@ -91,21 +91,21 @@ func (bearing Bearing) isDiffLessThan(other Bearing, threshold Bearing) bool {
 // stA.getTimesWith(stB) should return stA's departure time and stB's arrival
 func (st StopTime) getTimesWith(other StopTime) (time.Time, time.Time, error) {
 	var startTime, endTime time.Time
-	if st.DepartureTime != nil {
-		startTime = *st.DepartureTime
+	if !st.DepartureTime.IsZero() {
+		startTime = st.DepartureTime
 	} else {
-		if st.ArrivalTime != nil {
-			startTime = *st.ArrivalTime
+		if !st.ArrivalTime.IsZero() {
+			startTime = st.ArrivalTime
 		} else {
 			return time.Time{}, time.Time{}, fmt.Errorf("start StopTime has no departure or arrival time")
 		}
 	}
 
-	if other.ArrivalTime != nil {
-		endTime = *other.ArrivalTime
+	if !other.ArrivalTime.IsZero() {
+		endTime = other.ArrivalTime
 	} else {
-		if other.DepartureTime != nil {
-			endTime = *other.DepartureTime
+		if !other.DepartureTime.IsZero() {
+			endTime = other.DepartureTime
 		} else {
 			return time.Time{}, time.Time{}, fmt.Errorf("end StopTime has no departure or arrival time")
 		}
