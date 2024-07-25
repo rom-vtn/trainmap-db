@@ -3,6 +3,7 @@ package trainmapdb
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -281,9 +282,25 @@ type MutexedDB struct {
 }
 
 func (f Fetcher) LoadDatabase(config LoaderConfig) error {
+	stat, err := os.Stat(config.DatabasePath)
+	hasData := true
+	if errors.Is(err, os.ErrNotExist) {
+		hasData = false
+		err = nil //don't consider the file not existing as an error
+	}
+	if err != nil {
+		return err //handle all other errors
+	}
+	if hasData { //check if not an empty file
+		hasData = stat.Size() > 0
+	}
+	if hasData {
+		return fmt.Errorf("database file %s already exists, please remove it first", config.DatabasePath)
+	}
+
 	//migrate schema
 	db := f.db
-	err := db.AutoMigrate(&Calendar{}, &CalendarDate{}, &Trip{}, &Stop{}, &StopTime{}, &Route{}, &Agency{}, &Feed{}, &ServiceDay{})
+	err = db.AutoMigrate(&Calendar{}, &CalendarDate{}, &Trip{}, &Stop{}, &StopTime{}, &Route{}, &Agency{}, &Feed{}, &ServiceDay{})
 	if err != nil {
 		return fmt.Errorf("error when automigrating: %s", err.Error())
 	}
