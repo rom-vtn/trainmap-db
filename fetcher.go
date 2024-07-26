@@ -185,3 +185,13 @@ func (f Fetcher) GetStopTimesAtStop(feedId string, stopId string) ([]StopTime, e
 	err := f.db.Where(&StopTime{FeedId: feedId, StopId: stopId}).Find(&stopTimes).Error
 	return stopTimes, err
 }
+
+func (f Fetcher) GetAllAgencies() ([]Agency, error) {
+	var agencies []Agency
+	err := f.db.Where(&agencies).Find(&agencies).Error
+	if err != nil {
+		return nil, err
+	}
+	return agencies, nil
+
+}
