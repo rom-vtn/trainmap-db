@@ -198,7 +198,6 @@ func (f *Fetcher) getPossibleTrainSight(nm *NetworkMap, obsPoint Point, trip Tri
 				hasCloseStop = hasCloseStop || seg.target.GetPoint().getDistTo(obsPoint) < f.Config.CloseHeavyRailStationThreshold
 				hasBearing := !endBearing.isDiffLessThan(startBearing, f.Config.BearingMaxThreshold)
 				if hasBearing || hasCloseStop {
-					fmt.Printf("OK: %s -> %s on segment %s -> %s (%f -> %f) = %f\n", stBefore.Stop.StopName, stopTime.Stop.StopName, seg.source.StopName, seg.target.StopName, math.Mod(float64(startBearing*180/math.Pi), 360), math.Mod(float64(endBearing*180/math.Pi), 360), math.Mod(float64((endBearing-startBearing)*180/math.Pi), 360))
 					passingTime, err := stBefore.getPassingTime(obsPoint, stopTime)
 					if err != nil {
 						return TrainSight{}, false, err

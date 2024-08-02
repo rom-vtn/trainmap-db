@@ -148,7 +148,6 @@ func NewNetworkMapFromTrips(trips []Trip) (*NetworkMap, error) {
 			tm.updateSegment(tripSegment)
 		}
 	}
-	fmt.Printf("tm.segmentMap: %v\n", tm.segmentMap)
 	allSegments := tm.getAllSegments()
 
 	log.Default().Println("Sorting segment list...")
@@ -274,7 +273,6 @@ func (nm *NetworkMap) setSegmentOnGraph(seg segment, composition []segment) erro
 // tries adding the given segment to add extra info on the map.
 // WARN: the segments should be given in ascending order to guarantee the graph is correctly built!
 func (nm *NetworkMap) processSegment(seg segment) error {
-	fmt.Printf("processing seg: %f\n", seg.getDistance())
 	//add stops if not already in there
 	segSourceFsid, err := nm.EnsureCloseStopInGraph(seg.source)
 	if err != nil {
