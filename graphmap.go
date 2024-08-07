@@ -2,7 +2,6 @@ package trainmapdb
 
 import (
 	"fmt"
-	"log"
 	"sort"
 	"time"
 
@@ -141,23 +140,19 @@ func (tm tripMap) containsDirectional(seg segment) (time.Duration, bool) {
 
 // builds a network map using the given trips as a reference. it's assumed the stops and stop times are given.
 func NewNetworkMapFromTrips(trips []Trip) (*NetworkMap, error) {
-	log.Default().Println("Building full segment list...")
 	tm := newTripMap() //avoid duplicated
 	for _, trip := range trips {
 		for _, tripSegment := range trip.getSegments() {
 			tm.updateSegment(tripSegment)
 		}
 	}
-	fmt.Printf("tm.segmentMap: %v\n", tm.segmentMap)
 	allSegments := tm.getAllSegments()
 
-	log.Default().Println("Sorting segment list...")
 	sort.Slice(allSegments, func(i, j int) bool {
 		//remove travel time sorting, use distance instead
 		// return allSegments[i].travelTime < allSegments[j].travelTime
 		return allSegments[i].getDistance() < allSegments[j].getDistance()
 	})
-	log.Default().Println("Building network map...")
 	nm := NewNetworkMap()
 	for _, seg := range allSegments {
 		err := nm.processSegment(seg)
@@ -165,8 +160,6 @@ func NewNetworkMapFromTrips(trips []Trip) (*NetworkMap, error) {
 			return nil, err
 		}
 	}
-
-	log.Default().Println("Done building network map!")
 
 	return nm, nil
 }
@@ -274,7 +267,6 @@ func (nm *NetworkMap) setSegmentOnGraph(seg segment, composition []segment) erro
 // tries adding the given segment to add extra info on the map.
 // WARN: the segments should be given in ascending order to guarantee the graph is correctly built!
 func (nm *NetworkMap) processSegment(seg segment) error {
-	fmt.Printf("processing seg: %f\n", seg.getDistance())
 	//add stops if not already in there
 	segSourceFsid, err := nm.EnsureCloseStopInGraph(seg.source)
 	if err != nil {
@@ -291,11 +283,9 @@ func (nm *NetworkMap) processSegment(seg segment) error {
 	}
 
 	//try getting a path
-	// println("Getting path...")
 	path, err := graph.ShortestPath(nm.Graph, segSourceFsid, segTargetFsid)
 	// if no path, add a new one
 	if err == graph.ErrTargetNotReachable {
-		// println("-> no path, adding new...")
 		return nm.setSegmentOnGraph(seg, nil)
 	}
 
@@ -303,7 +293,6 @@ func (nm *NetworkMap) processSegment(seg segment) error {
 	if err != nil {
 		return err
 	}
-	// println("-> yes path, checking durations...")
 
 	//handle case where segment already exists, re add with current composition, travel time check is done by setsegmentongraph
 	if len(path) == 2 {
@@ -349,10 +338,8 @@ func (nm *NetworkMap) processSegment(seg segment) error {
 	const PATH_THRESHOLD_FACTOR = 1.66
 	// if our path is way longer than this one, then just make a new edge
 	if float64(ourWeight)*PATH_THRESHOLD_FACTOR < float64(pathWeight) {
-		// println("--> path is too long, adding a new one")
 		return nm.setSegmentOnGraph(seg, nil)
 	}
-	// println("--> path short enough, adding composite segment")
 
 	return nm.setSegmentOnGraph(seg, segments)
 }
