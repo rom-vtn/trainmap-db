@@ -170,6 +170,7 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip, r
 	const MOVING_KM_THRESHOLD = 15 //TODO adjust
 	const ONE_HOUR = time.Hour
 	const TIME_GRACE = 5 * time.Minute
+	const PREFER_MOVING_FACTOR = 2
 
 	//basic exclusion criteria (if no time overlap)
 	refTripMinTime := referenceTrip.StopTimes[0].DepartureTime.Add(refTripDelay)
@@ -230,10 +231,21 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip, r
 			//do the actual math
 			closestPoint := relativeInterPoint.getClosestPointWith(previousSet.relativeInterPoint, DEFAULT_PRECISION_DEPTH)
 			currentDistSquared := closestPoint.getAbsDistSquared()
-			if currentLowestDistSquared == 0.0 || currentDistSquared < currentLowestDistSquared {
+			possibleTripIsAtEnd := possibleTrip.getPositionAt(closestPoint.Time) == possibleTrip.getPositionAt(closestPoint.Time.Add(ONE_HOUR))
+			//get base threshold value
+			distSquaredThreshold := currentLowestDistSquared
+			//adjust threshold depending on moving sights over stationary sights preference
+			if lowestInterPointIsAtEndOfTrip && !possibleTripIsAtEnd {
+				//prefer a bit more
+				distSquaredThreshold /= PREFER_MOVING_FACTOR * PREFER_MOVING_FACTOR
+			}
+			if !lowestInterPointIsAtEndOfTrip && possibleTripIsAtEnd {
+				//prefer a bit less
+				distSquaredThreshold *= PREFER_MOVING_FACTOR * PREFER_MOVING_FACTOR
+			}
+			if currentLowestDistSquared == 0.0 || currentDistSquared < distSquaredThreshold {
 				//check if ref trip has reached destination (if not moving in an hour)
 				//moving sights have priority over stationary ones, even though stationary sights may be closer
-				possibleTripIsAtEnd := possibleTrip.getPositionAt(closestPoint.Time) == possibleTrip.getPositionAt(closestPoint.Time.Add(ONE_HOUR))
 				if lowestInterPointIsAtEndOfTrip || !possibleTripIsAtEnd {
 					currentLowestDistSquared = currentDistSquared
 					lowestInterPoint = closestPoint
