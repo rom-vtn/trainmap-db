@@ -231,6 +231,7 @@ func calculateServiceDays(db *MutexedDB, calendars []Calendar, calendarDates []C
 		if calendarDate.ExceptionType == ExceptionTypeServiceAdded {
 			serviceDays = append(serviceDays, serviceDay)
 		}
+		//save negative exceptions to compare with calendars
 		serviceDayToCalendarDate[serviceDay] = calendarDate
 	}
 
@@ -243,9 +244,9 @@ func calculateServiceDays(db *MutexedDB, calendars []Calendar, calendarDates []C
 				ServiceId: calendar.ServiceId,
 				Date:      date,
 			}
-			_, hasServiceException := serviceDayToCalendarDate[serviceDay]
+			_, hasNegativeServiceException := serviceDayToCalendarDate[serviceDay]
 			isServiceRunning := false
-			if !hasServiceException {
+			if !hasNegativeServiceException {
 				//if no service exception at the date:
 				//check weekday for regular schedule
 				isServiceRunning = calendar.GetWeekdayStatus(date.Weekday())

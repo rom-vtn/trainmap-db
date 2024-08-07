@@ -5,17 +5,17 @@ import (
 	"time"
 )
 
-func (f *Fetcher) GetSightsFromTripKey(feedId string, tripId string, date Date) ([]RealMovingTrainSight, error) {
+func (f *Fetcher) GetSightsFromTripKey(feedId string, tripId string, date Date, lateTime time.Duration) ([]RealMovingTrainSight, error) {
 	trip, err := f.GetTrip(feedId, tripId)
 	if err != nil {
 		return nil, err
 	}
-	return f.GetSightsFromTrip(trip, date)
+	return f.GetSightsFromTrip(trip, date, lateTime)
 }
 
 // gets the sights that are visible while riding the given trip on a given date
 // NOTE: does not check if the trip is actually running on that day
-func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date) ([]RealMovingTrainSight, error) {
+func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date, lateTime time.Duration) ([]RealMovingTrainSight, error) {
 	//first get the trips in the interval we want
 	const gracePeriod time.Duration = 5 * time.Minute
 	firstSt := trip.StopTimes[0]
@@ -39,7 +39,7 @@ func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date) ([]RealMovingTrainSigh
 	serviceToSights := make(map[FeededService][]MovingTrainSight, 0)
 	//check possible sight with every trip
 	for _, possibleTrip := range overlappingTrips {
-		possibleSight, hasPossibleSight, err := f.getPossibleMovingSight(trip, possibleTrip)
+		possibleSight, hasPossibleSight, err := f.getPossibleMovingSight(trip, possibleTrip, lateTime)
 		if err != nil {
 			return nil, err
 		}
@@ -165,15 +165,15 @@ func (rmts *RealMovingTrainSight) updateInnerDates() {
 	}
 }
 
-func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip) (MovingTrainSight, bool, error) {
+func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip, refTripDelay time.Duration) (MovingTrainSight, bool, error) {
 	const DEFAULT_PRECISION_DEPTH int = 10
 	const MOVING_KM_THRESHOLD = 15 //TODO adjust
 	const ONE_HOUR = time.Hour
 	const TIME_GRACE = 5 * time.Minute
 
 	//basic exclusion criteria (if no time overlap)
-	refTripMinTime := referenceTrip.StopTimes[0].DepartureTime
-	refTripMaxTime := referenceTrip.StopTimes[len(referenceTrip.StopTimes)-1].ArrivalTime
+	refTripMinTime := referenceTrip.StopTimes[0].DepartureTime.Add(refTripDelay)
+	refTripMaxTime := referenceTrip.StopTimes[len(referenceTrip.StopTimes)-1].ArrivalTime.Add(refTripDelay)
 	possibleTripMinTime := possibleTrip.StopTimes[0].DepartureTime
 	possibleTripMaxTime := possibleTrip.StopTimes[len(possibleTrip.StopTimes)-1].ArrivalTime
 	if refTripMaxTime.Add(TIME_GRACE).Before(possibleTripMinTime) || possibleTripMaxTime.Add(TIME_GRACE).Before(refTripMinTime) {
@@ -183,8 +183,8 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip) (
 	//get all possible time points from both trips
 	allRefTimesMap := make(map[time.Time]bool)
 	for _, stopTime := range referenceTrip.StopTimes {
-		allRefTimesMap[stopTime.ArrivalTime] = true
-		allRefTimesMap[stopTime.DepartureTime] = true
+		allRefTimesMap[stopTime.ArrivalTime.Add(refTripDelay)] = true
+		allRefTimesMap[stopTime.DepartureTime.Add(refTripDelay)] = true
 	}
 	for _, stopTime := range possibleTrip.StopTimes {
 		allRefTimesMap[stopTime.ArrivalTime] = true
@@ -215,7 +215,7 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip) (
 	for i, time := range allRefTimes {
 		//build the interpolation points
 		possibleTripInterPoint := InterpolationPoint{Time: time, Position: possibleTrip.getPositionAt(time)}
-		refTripInterPoint := InterpolationPoint{Time: time, Position: referenceTrip.getPositionAt(time)}
+		refTripInterPoint := InterpolationPoint{Time: time, Position: referenceTrip.getPositionAt(time.Add(-refTripDelay))}
 		relativeInterPoint := possibleTripInterPoint.getRelativePointTo(refTripInterPoint)
 		currentSet := interPointSet{
 			possibleTripInterPoint: possibleTripInterPoint,

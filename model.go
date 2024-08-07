@@ -242,7 +242,7 @@ func (c Calendar) GetWeekdayStatus(weekday time.Weekday) bool {
 	case time.Sunday:
 		return c.Sunday
 	}
-	return false
+	panic(fmt.Errorf("uhhh, may I kindly ask what kind of weekday %v is?", weekday))
 }
 
 type ExceptionType uint
