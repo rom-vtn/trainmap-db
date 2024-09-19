@@ -40,14 +40,14 @@ func (s *segment) getDistance() float64 {
 	return s.distance
 }
 
-// a map of a transport network (here rail), used to interpolate the trajectory or large hops based on smaller hops
+// a NetworkMap is a map of a transport network (here rail), used to interpolate the trajectory or large hops based on smaller hops
 type NetworkMap struct {
 	ParentStops      map[feededStopId]Stop         //all parent stops
 	CityAssociations map[feededStopId]feededStopId //maps a stop to its parent stop; parent stop is self if no stops nearby, otherwise the nearest first added one
 	Graph            graph.Graph[feededStopId, Stop]
 }
 
-// returns a new empty network map
+// NewNetworkMap returns a new empty network map
 func NewNetworkMap() *NetworkMap {
 	stopHashFunc := func(stop Stop) feededStopId {
 		return stop.getFeededStopId()
@@ -138,7 +138,7 @@ func (tm tripMap) containsDirectional(seg segment) (time.Duration, bool) {
 	return travelTime, true
 }
 
-// builds a network map using the given trips as a reference. it's assumed the stops and stop times are given.
+// NewNetworkMapFromTrips builds a network map using the given trips as a reference. it's assumed the stops and stop times are given.
 func NewNetworkMapFromTrips(trips []Trip) (*NetworkMap, error) {
 	tm := newTripMap() //avoid duplicated
 	for _, trip := range trips {
@@ -164,7 +164,7 @@ func NewNetworkMapFromTrips(trips []Trip) (*NetworkMap, error) {
 	return nm, nil
 }
 
-// builds a network map using all trips, but filters by those having a given route type
+// NewNetworkMapFromRouteTypes builds a network map using all trips, but filters by those having a given route type
 func NewNetworkMapFromRouteTypes(trips []Trip, routeType RouteType) (*NetworkMap, error) {
 	var filteredTrips []Trip
 	for _, trip := range trips {
@@ -175,6 +175,7 @@ func NewNetworkMapFromRouteTypes(trips []Trip, routeType RouteType) (*NetworkMap
 	return NewNetworkMapFromTrips(filteredTrips)
 }
 
+// NewNetworkMapFromLocation builds a network map from all trips whose bbox contains the given point.
 func NewNetworkMapFromLocation(f Fetcher, point Point) (*NetworkMap, error) {
 	trips, err := f.GetTripsInsidePointInterval(point, point)
 	if err != nil {
@@ -183,6 +184,7 @@ func NewNetworkMapFromLocation(f Fetcher, point Point) (*NetworkMap, error) {
 	return NewNetworkMapFromTrips(trips)
 }
 
+// NewNetworkMapFromLocation builds a network map from all trips whose bbox intersect with the given bbox.
 func NewNetworkMapFromPointBox(f Fetcher, pt1, pt2 Point) (*NetworkMap, error) {
 	trips, err := f.GetTripsInsidePointInterval(pt1, pt2)
 	if err != nil {
@@ -191,7 +193,7 @@ func NewNetworkMapFromPointBox(f Fetcher, pt1, pt2 Point) (*NetworkMap, error) {
 	return NewNetworkMapFromTrips(trips)
 }
 
-// adds a stop to the network map if it doesn't already exist
+// EnsureCloseStopInGraph adds a stop to the network map if it doesn't already exist
 func (nm *NetworkMap) EnsureCloseStopInGraph(stop Stop) (feededStopId, error) {
 	//if contained, return assigned parent stop
 	if nm.Contains(stop) {
@@ -215,7 +217,7 @@ func (nm *NetworkMap) EnsureCloseStopInGraph(stop Stop) (feededStopId, error) {
 	return stop.getFeededStopId(), nil
 }
 
-// returns whether or not the stop is stored in the network map
+// Contains returns whether or not the stop is stored in the network map
 func (nm *NetworkMap) Contains(stop Stop) bool {
 	_, ok := nm.CityAssociations[stop.getFeededStopId()]
 	return ok

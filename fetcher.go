@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// A FetcherConfig represents the parameters used for a fetcher.
 type FetcherConfig struct {
 	OutOfBoundsGraceAbsolute        float64
 	OutOfBoundsGracePercentage      float64
@@ -32,6 +33,7 @@ func NewDefaultConfig() FetcherConfig {
 	}
 }
 
+// A Fetcher is a wrapper around a DB connection.
 type Fetcher struct {
 	db     *gorm.DB
 	Config FetcherConfig
@@ -53,6 +55,7 @@ func NewFetcher(dbFileName string, config *FetcherConfig) (*Fetcher, error) {
 	return &Fetcher{db: db, Config: fetcherConfig}, nil
 }
 
+// GetAllTrips fetches all the trips in the DB by batches and returns them.
 func (f Fetcher) GetAllTrips() ([]Trip, error) {
 	var trips, tripBatch []Trip
 	const BATCH_SIZE int = 1000
@@ -71,22 +74,26 @@ func (f Fetcher) GetAllTrips() ([]Trip, error) {
 	return trips, nil
 }
 
+// GetAllStops returns all the stops in the DB.
 func (f Fetcher) GetAllStops() ([]Stop, error) {
 	var stops []Stop
 	err := f.db.Model(&Stop{}).Preload(clause.Associations).Find(&stops).Error
 	return stops, err
 }
 
+// A FeededService represents a combined feed ID and service ID.
 type FeededService struct {
 	FeedId    string
 	ServiceId string
 }
 
+// GetServicesOnDate returns all services that are active on a given date.
 func (f Fetcher) GetServicesOnDate(date time.Time) ([]ServiceDay, error) {
 	//NOTE: SQL "BETWEEN" is inclusive on both sides
 	return f.GetServicesBetweenDates(date, date)
 }
 
+// GetServicesBetweenDates retuns all services that are active between the given dates.
 func (f Fetcher) GetServicesBetweenDates(startDate time.Time, endDate time.Time) ([]ServiceDay, error) {
 	var serviceDays []ServiceDay
 	err := f.db.Model(&ServiceDay{}).Where("Date BETWEEN ? AND ?", startDate, endDate).Find(&serviceDays).Error
@@ -97,6 +104,7 @@ func (f Fetcher) GetServicesBetweenDates(startDate time.Time, endDate time.Time)
 	return serviceDays, nil
 }
 
+// GetFeededServiceIdTrips returns all trips that run on the given service
 func (f Fetcher) GetFeededServiceIdTrips(feededService FeededService) ([]Trip, error) {
 	var trips []Trip
 	err := f.db.Where("FeedId = ?", feededService.FeedId).Where("ServiceId = ?", feededService.ServiceId).Find(&trips).Error
@@ -127,6 +135,7 @@ func (f Fetcher) GetFeed(feedId string) (Feed, error) {
 	return feed, err
 }
 
+// GetTripsContaining returns all trips whose bounding box contains the given point
 func (f Fetcher) GetTripsContaining(pt Point) ([]Trip, error) {
 	return f.GetTripsInsidePointInterval(pt, pt)
 }
@@ -139,10 +148,14 @@ func pointsToBoundingBox(pt1, pt2 Point) (minLat, minLon, maxLat, maxLon float64
 	return minLat, maxLat, minLon, maxLon
 }
 
+// GetTripsInsidePointInterval returns all trips whose bounding box intersects with
+// the bounding box formed by the 2 given points.
 func (f Fetcher) GetTripsInsidePointInterval(pt1 Point, pt2 Point) ([]Trip, error) {
 	return f.GetTripsWithIntersection(pointsToBoundingBox(pt1, pt2))
 }
 
+// GetTripsWithIntersection returns all trips whose bounding box intersects with
+// the given bounding box.
 func (f Fetcher) GetTripsWithIntersection(minLat float64, maxLat float64, minLon float64, maxLon float64) ([]Trip, error) {
 	var trips, tripBatch []Trip
 	const batchSize int = 1000
@@ -174,12 +187,14 @@ func (f Fetcher) GetStop(feedId string, stopId string) (Stop, error) {
 	return stop, err
 }
 
+// GetFeeds returns all the feed info known in the DB.
 func (f Fetcher) GetFeeds() ([]Feed, error) {
 	var feeds []Feed
 	err := f.db.Where(&feeds).Find(&feeds).Error
 	return feeds, err
 }
 
+// GetStopTimesAtStop returns all the StopTimes related to the given Stop.
 func (f Fetcher) GetStopTimesAtStop(feedId string, stopId string) ([]StopTime, error) {
 	var stopTimes []StopTime
 	err := f.db.Where(&StopTime{FeedId: feedId, StopId: stopId}).Find(&stopTimes).Error

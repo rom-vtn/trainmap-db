@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// GetSightsFromTripKey gets the sights that are visible while riding the given trip on a given date
+// NOTE: does not check if the trip is actually running on that day
 func (f *Fetcher) GetSightsFromTripKey(feedId string, tripId string, date Date, lateTime time.Duration) ([]RealMovingTrainSight, error) {
 	trip, err := f.GetTrip(feedId, tripId)
 	if err != nil {
@@ -13,7 +15,7 @@ func (f *Fetcher) GetSightsFromTripKey(feedId string, tripId string, date Date, 
 	return f.GetSightsFromTrip(trip, date, lateTime)
 }
 
-// gets the sights that are visible while riding the given trip on a given date
+// GetSightsFromTrip gets the sights that are visible while riding the given trip on a given date
 // NOTE: does not check if the trip is actually running on that day
 func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date, lateTime time.Duration) ([]RealMovingTrainSight, error) {
 	//first get the trips in the interval we want
@@ -79,6 +81,7 @@ func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date, lateTime time.Duration
 	return realMovingTrainSights, nil
 }
 
+// an InterpolationPoint is a point+time combination.
 type InterpolationPoint struct {
 	Position Point
 	Time     time.Time
@@ -138,6 +141,7 @@ func (ip InterpolationPoint) getAbsDistSquared() float64 {
 	return ip.Position.Lat*ip.Position.Lat + ip.Position.Lon*ip.Position.Lon
 }
 
+// a MovingTrainSight represents a train sight while aboard a given train, but does NOT contain date/time information.
 type MovingTrainSight struct {
 	ServiceId         string             `json:"service_id"`
 	TripId            string             `json:"trip_id"`
@@ -151,6 +155,7 @@ type MovingTrainSight struct {
 	Distance          float64            `json:"distance_km"` //distance in kilometers
 }
 
+// a RealMovingTrainSight contains a MovingTrainSight as well as date/time information.
 type RealMovingTrainSight struct {
 	MovingTrainSight MovingTrainSight `json:"sight"`
 	Timestamp        time.Time        `json:"timestamp"`

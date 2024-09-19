@@ -263,11 +263,13 @@ func calculateServiceDays(db *MutexedDB, calendars []Calendar, calendarDates []C
 	return err
 }
 
+// a LoaderConfig represents a config used to load GTFS feeds into a DB.
 type LoaderConfig struct {
 	DatabasePath string              `json:"db_path"`
 	Contents     []LoaderConfigEntry `json:"contents"`
 }
 
+// a LoaderConfigEntry contains info about a specific GTFS feed and how it should be loaded.
 type LoaderConfigEntry struct {
 	Active             bool   `json:"active"`
 	FeedURL            string `json:"feed_url"`
@@ -276,12 +278,14 @@ type LoaderConfigEntry struct {
 	DisplayName        string `json:"display_name"`
 }
 
+// a MutexedDB is just as ugly and horrible as it sounds (SQLite has forced my hand)
 type MutexedDB struct {
 	db    *gorm.DB
 	mutex sync.Mutex
 	wg    sync.WaitGroup
 }
 
+// LoadDatabase builds a database from the given LoaderConfig into the given file.
 func (f Fetcher) LoadDatabase(config LoaderConfig) error {
 	stat, err := os.Stat(config.DatabasePath)
 	hasData := true
