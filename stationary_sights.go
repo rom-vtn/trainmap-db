@@ -3,11 +3,8 @@ package trainmapdb
 import (
 	"fmt"
 	"math"
-	"os"
 	"sort"
 	"time"
-
-	"github.com/dominikbraun/graph/draw"
 
 	"github.com/jftuga/geodist"
 )
@@ -255,26 +252,11 @@ func (f Fetcher) GetRealTrainSights(obsPoint Point, startDate Date, endDate Date
 	if err != nil {
 		return nil, err
 	}
-	//DEBUG
-	//RESULTS: LOOOKUP INCLUDES OUSIDE BOUNDS
-	//hasP34 := false
-	//for _, t := range possibleTrips {
-	//	routeName := t.Route.RouteShortName
-	//	if routeName == "P34" {
-	//		hasP34 = true
-	//	}
-	//}
-	//if !hasP34 {
-	//	return nil, fmt.Errorf("NO P34 FOUND")
-	//}
 
 	nm, err := NewNetworkMapFromTrips(possibleTrips)
 	if err != nil {
 		return nil, err
 	}
-
-	file, _ := os.Create("my-graph.gv")
-	draw.DOT(nm.Graph, file)
 
 	serviceToSights := make(map[FeededService][]TrainSight)
 	for _, possibleTrip := range possibleTrips {
