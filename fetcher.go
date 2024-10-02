@@ -12,6 +12,7 @@ import (
 
 // A FetcherConfig represents the parameters used for a fetcher.
 type FetcherConfig struct {
+	TimeZone                        string //https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 	OutOfBoundsGraceAbsolute        float64
 	OutOfBoundsGracePercentage      float64
 	BearingMinThreshold             Bearing //anything below this will be not be considered as much
@@ -23,6 +24,7 @@ type FetcherConfig struct {
 
 func NewDefaultConfig() FetcherConfig {
 	return FetcherConfig{
+		TimeZone:                        "Europe/Paris",
 		OutOfBoundsGraceAbsolute:        0.009 * 15, //about 15km in degrees
 		OutOfBoundsGracePercentage:      0.10,
 		BearingMinThreshold:             Bearing(2 * math.Pi / 6), //60deg

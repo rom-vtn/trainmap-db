@@ -147,7 +147,13 @@ type StopTime struct {
 	DropOffType      ServiceType `csv:"pickup_type" json:"dorp_off_type"`
 }
 
-func (st *StopTime) updateDate(date time.Time) {
+func (st *StopTime) updateDate(date time.Time, tz *time.Location) {
+	dateRepr := date.Format("2006-01-02")
+	atNoon, err := time.ParseInLocation("2006-01-02 15:04:05", dateRepr+" 12:00:00", tz)
+	date = atNoon.Add(-12 * time.Hour)
+	if err != nil {
+		panic("we should never get a time parsing failure")
+	}
 	if !st.ArrivalTime.IsZero() {
 		newTime := date.Add(st.ArrivalTime.Sub(time.Unix(0, 0)))
 		st.ArrivalTime = newTime

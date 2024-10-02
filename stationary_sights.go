@@ -44,13 +44,13 @@ type RealTrainSight struct {
 	Date       time.Time  `json:"date"`
 }
 
-func (rts *RealTrainSight) updateInnerDates() {
-	rts.TrainSight.StBefore.updateDate(rts.Date)
-	rts.TrainSight.StAfter.updateDate(rts.Date)
-	rts.TrainSight.FirstSt.updateDate(rts.Date)
-	rts.TrainSight.LastSt.updateDate(rts.Date)
+func (rts *RealTrainSight) updateInnerDates(tz *time.Location) {
+	rts.TrainSight.StBefore.updateDate(rts.Date, tz)
+	rts.TrainSight.StAfter.updateDate(rts.Date, tz)
+	rts.TrainSight.FirstSt.updateDate(rts.Date, tz)
+	rts.TrainSight.LastSt.updateDate(rts.Date, tz)
 	for i := range rts.TrainSight.Trip.StopTimes {
-		rts.TrainSight.Trip.StopTimes[i].updateDate(rts.Date)
+		rts.TrainSight.Trip.StopTimes[i].updateDate(rts.Date, tz)
 	}
 }
 
@@ -292,6 +292,11 @@ func (f Fetcher) GetRealTrainSights(obsPoint Point, startDate Date, endDate Date
 	}
 	fmt.Println("Done calculating trips!")
 
+	tz, err := time.LoadLocation(f.Config.TimeZone)
+	if err != nil {
+		return nil, err
+	}
+
 	//cross reference our possible trips to check for trips that cross us
 	realTrainSights := []RealTrainSight{}
 	for date, feededServices := range dateToServices {
@@ -302,7 +307,7 @@ func (f Fetcher) GetRealTrainSights(obsPoint Point, startDate Date, endDate Date
 					Date:       date,
 					Timestamp:  date.Add(trainSight.passingTime),
 				}
-				realTrainSight.updateInnerDates()
+				realTrainSight.updateInnerDates(tz)
 				realTrainSights = append(realTrainSights, realTrainSight)
 			}
 		}

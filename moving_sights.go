@@ -52,6 +52,11 @@ func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date, lateTime time.Duration
 		serviceToSights[feededService] = append(serviceToSights[feededService], possibleSight)
 	}
 
+	tz, err := time.LoadLocation(f.Config.TimeZone)
+	if err != nil {
+		return nil, err
+	}
+
 	realMovingTrainSights := make([]RealMovingTrainSight, 0)
 	for date, feededServices := range dateToServices {
 		for _, feededService := range feededServices {
@@ -68,7 +73,7 @@ func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date, lateTime time.Duration
 					Date:             date,
 					Timestamp:        date.Add(duration),
 				}
-				rmts.updateInnerDates()
+				rmts.updateInnerDates(tz)
 				realMovingTrainSights = append(realMovingTrainSights, rmts)
 			}
 		}
@@ -162,11 +167,11 @@ type RealMovingTrainSight struct {
 	Date             time.Time        `json:"date"`
 }
 
-func (rmts *RealMovingTrainSight) updateInnerDates() {
-	rmts.MovingTrainSight.FirstSt.updateDate(rmts.Date)
-	rmts.MovingTrainSight.LastSt.updateDate(rmts.Date)
+func (rmts *RealMovingTrainSight) updateInnerDates(tz *time.Location) {
+	rmts.MovingTrainSight.FirstSt.updateDate(rmts.Date, tz)
+	rmts.MovingTrainSight.LastSt.updateDate(rmts.Date, tz)
 	for i := range rmts.MovingTrainSight.Trip.StopTimes {
-		rmts.MovingTrainSight.Trip.StopTimes[i].updateDate(rmts.Date)
+		rmts.MovingTrainSight.Trip.StopTimes[i].updateDate(rmts.Date, tz)
 	}
 }
 
