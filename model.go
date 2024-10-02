@@ -151,6 +151,8 @@ func (st *StopTime) updateDate(date time.Time, tz *time.Location) {
 	dateRepr := date.Format("2006-01-02")
 	atNoon, err := time.ParseInLocation("2006-01-02 15:04:05", dateRepr+" 12:00:00", tz)
 	date = atNoon.Add(-12 * time.Hour)
+	_, secsToUtc := time.Now().In(tz).Zone()
+	date = date.Add(time.Duration(secsToUtc) * time.Second)
 	if err != nil {
 		panic("we should never get a time parsing failure")
 	}
