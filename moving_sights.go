@@ -1,36 +1,37 @@
 package trainmapdb
 
 import (
+	"fmt"
 	"sort"
 	"time"
 )
 
 // GetSightsFromTripKey gets the sights that are visible while riding the given trip on a given date
 // NOTE: does not check if the trip is actually running on that day
-func (f *Fetcher) GetSightsFromTripKey(feedId string, tripId string, date Date, lateTime time.Duration) ([]RealMovingTrainSight, error) {
+func (f *Fetcher) GetSightsFromTripKey(feedId string, tripId string, date Date, lateTime time.Duration) ([]RealMovingTrainSight, Trip, error) {
 	trip, err := f.GetTrip(feedId, tripId)
 	if err != nil {
-		return nil, err
+		return nil, Trip{}, err
 	}
 	return f.GetSightsFromTrip(trip, date, lateTime)
 }
 
 // GetSightsFromTrip gets the sights that are visible while riding the given trip on a given date
 // NOTE: does not check if the trip is actually running on that day
-func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date, lateTime time.Duration) ([]RealMovingTrainSight, error) {
+func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date, lateTime time.Duration) ([]RealMovingTrainSight, Trip, error) {
 	//first get the trips in the interval we want
 	const gracePeriod time.Duration = 5 * time.Minute
 	firstSt := trip.StopTimes[0]
 	lastSt := trip.StopTimes[len(trip.StopTimes)-1]
 	overlappingTrips, err := f.GetTripsInsidePointInterval(firstSt.Stop.GetPoint(), lastSt.Stop.GetPoint())
 	if err != nil {
-		return nil, err
+		return nil, Trip{}, err
 	}
 
 	//get service days to check later when they run
 	serviceDays, err := f.GetServicesOnDate(time.Time(date))
 	if err != nil {
-		return nil, err
+		return nil, Trip{}, err
 	}
 	dateToServices := make(map[time.Time][]FeededService)
 	for _, serviceDay := range serviceDays {
@@ -43,7 +44,7 @@ func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date, lateTime time.Duration
 	for _, possibleTrip := range overlappingTrips {
 		possibleSight, hasPossibleSight, err := f.getPossibleMovingSight(trip, possibleTrip, lateTime)
 		if err != nil {
-			return nil, err
+			return nil, Trip{}, err
 		}
 		if !hasPossibleSight {
 			continue
@@ -54,7 +55,7 @@ func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date, lateTime time.Duration
 
 	tz, err := time.LoadLocation(f.Config.TimeZone)
 	if err != nil {
-		return nil, err
+		return nil, Trip{}, err
 	}
 
 	realMovingTrainSights := make([]RealMovingTrainSight, 0)
@@ -83,7 +84,13 @@ func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date, lateTime time.Duration
 		return realMovingTrainSights[i].Timestamp.Before(realMovingTrainSights[j].Timestamp)
 	})
 
-	return realMovingTrainSights, nil
+	//adapt trip stoptimes
+	newTrip := trip
+	for i := range trip.StopTimes {
+		newTrip.StopTimes[i].updateDate(time.Time(date), tz)
+	}
+
+	return realMovingTrainSights, newTrip, nil
 }
 
 // an InterpolationPoint is a point+time combination.
@@ -168,6 +175,11 @@ type RealMovingTrainSight struct {
 }
 
 func (rmts *RealMovingTrainSight) updateInnerDates(tz *time.Location) {
+	newTimestamp, err := time.ParseInLocation(time.DateTime, rmts.Timestamp.Format(time.DateTime), tz)
+	if err != nil {
+		panic(fmt.Errorf("error while converting moving sight timestamp: %s", err.Error()))
+	}
+	rmts.Timestamp = newTimestamp
 	rmts.MovingTrainSight.FirstSt.updateDate(rmts.Date, tz)
 	rmts.MovingTrainSight.LastSt.updateDate(rmts.Date, tz)
 	for i := range rmts.MovingTrainSight.Trip.StopTimes {
