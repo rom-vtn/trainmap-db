@@ -49,7 +49,7 @@ func (f *Fetcher) GetSightsFromTrip(trip Trip, date Date, lateTime time.Duration
 		if !hasPossibleSight {
 			continue
 		}
-		feededService := FeededService{FeedId: possibleTrip.FeedId, ServiceId: possibleTrip.ServiceId}
+		feededService := FeededService{FeedId: possibleTrip.FeedId, ServiceId: possibleTrip.RefServiceId}
 		serviceToSights[feededService] = append(serviceToSights[feededService], possibleSight)
 	}
 
@@ -289,7 +289,7 @@ func (f Fetcher) getPossibleMovingSight(referenceTrip Trip, possibleTrip Trip, r
 	absInterPoint := InterpolationPoint{Position: absPoint, Time: lowestInterPoint.Time}
 
 	mts := MovingTrainSight{
-		ServiceId:         possibleTrip.ServiceId,
+		ServiceId:         possibleTrip.RefServiceId,
 		TripId:            possibleTrip.TripId,
 		FeedId:            possibleTrip.FeedId,
 		Feed:              possibleTrip.Feed,

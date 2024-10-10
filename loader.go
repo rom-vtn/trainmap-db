@@ -14,7 +14,6 @@ import (
 
 	"github.com/jszwec/csvutil"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 )
 
@@ -29,23 +28,30 @@ func unmarshalCsv[T any](zipFile *zip.Reader, csvFileName string, output *[]T) e
 	if err != nil {
 		return err
 	}
+	//remove BOM from file if there's one
+	if len(content) > 3 &&
+		content[0] == 0xef &&
+		content[1] == 0xbb &&
+		content[2] == 0xbf {
+		content = content[3:]
+	}
 
 	return csvutil.Unmarshal(content, output)
 }
 
-func addToDB[T any](mutexedDb *MutexedDB, input []T) error {
-	mutexedDb.wg.Add(1)
-	go func(mutexedDB *MutexedDB, input []T) {
-		dbMutex := &mutexedDb.mutex
-		db := mutexedDb.db
-		defer mutexedDb.wg.Done()
-		defer dbMutex.Unlock()
-		dbMutex.Lock()
-		err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(input).Error
+func addToDB[T any](scdb syncCompatibleDB, input []T) error {
+	scdb.wgIncrement()
+	go func(scdb syncCompatibleDB, input []T) {
+		db := scdb.getDB()
+		defer scdb.wgDone()
+		defer scdb.freeMutex()
+		scdb.takeMutex()
+		// err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(input).Error
+		err := db.Create(input).Error
 		if err != nil {
 			panic(fmt.Errorf("could not insert to DB: %s", err.Error()))
 		}
-	}(mutexedDb, input)
+	}(scdb, input)
 	return nil
 }
 
@@ -58,7 +64,7 @@ func readCsv[T any](zipFile *zip.Reader, csvFileName string) ([]T, error) {
 	return content, nil
 }
 
-func parseCalendarDates(zipFile *zip.Reader, db *MutexedDB, feedId string, validServiceIds map[string]bool) ([]CalendarDate, error) {
+func parseCalendarDates(zipFile *zip.Reader, scdb syncCompatibleDB, feedId string, validServiceIds map[string]bool) ([]CalendarDate, error) {
 	calendarDates, err := readCsv[CalendarDate](zipFile, "calendar_dates.txt")
 	if err != nil {
 		//NOTE: not a reason to forward the error, GTFS spec allows for no calendar dates
@@ -77,10 +83,10 @@ func parseCalendarDates(zipFile *zip.Reader, db *MutexedDB, feedId string, valid
 		calendarDates[i].Date = date
 		validCalendarDates = append(validCalendarDates, calendarDates[i])
 	}
-	return calendarDates, addToDB(db, validCalendarDates)
+	return validCalendarDates, addToDB(scdb, validCalendarDates)
 }
 
-func parseCalendar(zipFile *zip.Reader, db *MutexedDB, feedId string, validService map[string]bool) ([]Calendar, error) {
+func parseCalendar(zipFile *zip.Reader, scdb syncCompatibleDB, feedId string, validService map[string]bool) ([]Calendar, error) {
 	calendars, err := readCsv[Calendar](zipFile, "calendar.txt")
 	if err != nil {
 		//NOTE: not a reason to forward the error, GTFS spec allows for no calendars
@@ -105,31 +111,39 @@ func parseCalendar(zipFile *zip.Reader, db *MutexedDB, feedId string, validServi
 		}
 		validCalendars = append(validCalendars, calendars[i])
 	}
-	return validCalendars, addToDB(db, validCalendars)
+	return validCalendars, addToDB(scdb, validCalendars)
 }
 
-func parseStops(zipFile *zip.Reader, db *MutexedDB, feedId string, validStopIds map[string]bool) error {
+func parseStops(zipFile *zip.Reader, scdb syncCompatibleDB, feedId string, validStopIds map[string]bool) error {
 	stops, err := readCsv[Stop](zipFile, "stops.txt")
 	if err != nil {
 		return err
 	}
 	validStops := make([]Stop, 0, len(stops))
 	for i := range stops {
-		if !validStopIds[stops[i].StopId] {
-			continue
-		}
+		// filter got removed to make sure parent stops with no stoptimes get included
+		// TODO maybe find a better solution??
+
+		// if !validStopIds[stops[i].StopId] {
+		// 	continue
+		// }
+
 		stops[i].FeedId = feedId
+		//go around the foreign key constraint
+		if stops[i].CsvParentStationId != "" {
+			stops[i].ParentStationId = &stops[i].CsvParentStationId
+		}
 		err = stops[i].parseLocation()
 		if err != nil {
 			return err
 		}
 		validStops = append(validStops, stops[i])
 	}
-	return addToDB(db, validStops)
+	return addToDB(scdb, validStops)
 }
 
 // returns (validTripIds, validServiceIds, err)
-func parseTrips(zipFile *zip.Reader, db *MutexedDB, feedId string, validRouteIds map[string]bool) (validTripIds map[string]bool, validServiceIds map[string]bool, err error) {
+func parseTrips(zipFile *zip.Reader, scdb syncCompatibleDB, feedId string, validRouteIds map[string]bool) (validTripIds map[string]bool, validServiceIds map[string]bool, err error) {
 	trips, err := readCsv[Trip](zipFile, "trips.txt")
 	if err != nil {
 		return nil, nil, err
@@ -138,18 +152,18 @@ func parseTrips(zipFile *zip.Reader, db *MutexedDB, feedId string, validRouteIds
 	validServiceIds = make(map[string]bool)
 	validTrips := make([]Trip, 0, len(trips))
 	for i := range trips {
-		if _, ok := validRouteIds[trips[i].RouteId]; !ok {
+		if _, ok := validRouteIds[trips[i].RefRouteId]; !ok {
 			continue
 		}
 		trips[i].FeedId = feedId
 		validTrips = append(validTrips, trips[i])
 		validTripIds[trips[i].TripId] = true
-		validServiceIds[trips[i].ServiceId] = true
+		validServiceIds[trips[i].RefServiceId] = true
 	}
-	return validTripIds, validServiceIds, addToDB(db, validTrips)
+	return validTripIds, validServiceIds, addToDB(scdb, validTrips)
 }
 
-func parseStopTimes(zipFile *zip.Reader, db *MutexedDB, feedId string, validTripIds map[string]bool) (map[string]bool, error) {
+func parseStopTimes(zipFile *zip.Reader, scdb syncCompatibleDB, feedId string, validTripIds map[string]bool) (map[string]bool, error) {
 	stopTimes, err := readCsv[StopTime](zipFile, "stop_times.txt")
 	if err != nil {
 		return nil, err
@@ -168,10 +182,10 @@ func parseStopTimes(zipFile *zip.Reader, db *MutexedDB, feedId string, validTrip
 		validStopTimes = append(validStopTimes, stopTimes[i])
 		validStopIds[stopTimes[i].StopId] = true
 	}
-	return validStopIds, addToDB(db, validStopTimes)
+	return validStopIds, addToDB(scdb, validStopTimes)
 }
 
-func parseRoutes(zipFile *zip.Reader, db *MutexedDB, feedId string) (map[string]bool, error) {
+func parseRoutes(zipFile *zip.Reader, scdb syncCompatibleDB, feedId string) (map[string]bool, error) {
 	routes, err := readCsv[Route](zipFile, "routes.txt")
 	if err != nil {
 		return nil, err
@@ -185,21 +199,25 @@ func parseRoutes(zipFile *zip.Reader, db *MutexedDB, feedId string) (map[string]
 			validRouteIds[routes[i].RouteId] = true
 		}
 	}
-	return validRouteIds, addToDB(db, validRoutes)
+	return validRouteIds, addToDB(scdb, validRoutes)
 }
 
-func parseAgencies(zipFile *zip.Reader, db *MutexedDB, feedId string) error {
+func parseAgencies(zipFile *zip.Reader, scdb syncCompatibleDB, feedId string) error {
 	agencies, err := readCsv[Agency](zipFile, "agency.txt")
 	if err != nil {
 		return err
 	}
 	for i := range agencies {
 		agencies[i].FeedId = feedId
+		if agencies[i].AgencyId == "" {
+			fmt.Printf("agencies[i]: %v\n", agencies[i])
+			panic("FHEUZIOJHFZEUI") //JESSE WHAT THE FUCK IS THIS
+		}
 	}
-	return addToDB(db, agencies)
+	return addToDB(scdb, agencies)
 }
 
-func parseFeed(zipFile *zip.Reader, db *MutexedDB, feedId string, displayName string) error {
+func parseFeed(zipFile *zip.Reader, scdb syncCompatibleDB, feedId string, displayName string) error {
 	//NOTE: errors are possible if no feed_info is given, in this case we just add our own feed info entry
 	feeds, _ := readCsv[Feed](zipFile, "feed_info.txt")
 	if feeds == nil {
@@ -210,11 +228,11 @@ func parseFeed(zipFile *zip.Reader, db *MutexedDB, feedId string, displayName st
 		feeds[i].DisplayName = displayName
 	}
 	// TODO check that this is how the GTFS spec should really be implemented
-	return addToDB(db, feeds)
+	return addToDB(scdb, feeds)
 }
 
 // calculate service days based on calendars and calendarDates to make lookups easier
-func calculateServiceDays(db *MutexedDB, calendars []Calendar, calendarDates []CalendarDate) error {
+func calculateServiceDays(scdb syncCompatibleDB, calendars []Calendar, calendarDates []CalendarDate) error {
 	const ONE_DAY = 24 * time.Hour
 
 	var serviceDays []ServiceDay
@@ -259,7 +277,7 @@ func calculateServiceDays(db *MutexedDB, calendars []Calendar, calendarDates []C
 	}
 	//then add service exceptions
 
-	err := addToDB(db, serviceDays)
+	err := addToDB(scdb, serviceDays)
 	return err
 }
 
@@ -278,11 +296,12 @@ type LoaderConfigEntry struct {
 	DisplayName        string `json:"display_name"`
 }
 
-// a MutexedDB is just as ugly and horrible as it sounds (SQLite has forced my hand)
-type MutexedDB struct {
-	db    *gorm.DB
-	mutex sync.Mutex
-	wg    sync.WaitGroup
+func migrate(db *gorm.DB, disableForeignKeyConstraints bool) error {
+	fkOriginalSettings := db.Config.DisableForeignKeyConstraintWhenMigrating
+	db.Config.DisableForeignKeyConstraintWhenMigrating = disableForeignKeyConstraints
+	err := db.AutoMigrate(&Feed{}, &Agency{}, &Calendar{}, &CalendarDate{}, &ServiceDay{}, &Stop{}, &Route{}, &Trip{}, &StopTime{})
+	db.Config.DisableForeignKeyConstraintWhenMigrating = fkOriginalSettings
+	return err
 }
 
 // LoadDatabase builds a database from the given LoaderConfig into the given file.
@@ -305,13 +324,45 @@ func (f Fetcher) LoadDatabase(config LoaderConfig) error {
 
 	//migrate schema
 	db := f.db
-	err = db.AutoMigrate(&Calendar{}, &CalendarDate{}, &Trip{}, &Stop{}, &StopTime{}, &Route{}, &Agency{}, &Feed{}, &ServiceDay{})
+	// var toMigrate = []any{&Feed{}, &Agency{}, &Calendar{}, &CalendarDate{}, &ServiceDay{}, &Stop{}, &Route{}, &Trip{}, &StopTime{}}
+	// for {
+	// 	atLeaseOneSuccessful := false
+	// 	fmt.Printf("toMigrate: %v\n", toMigrate)
+	// 	var failures []any
+	// 	for _, val := range toMigrate {
+	// 		err = db.AutoMigrate(val)
+	// 		if err != nil {
+	// 			failures = append(failures, val)
+	// 			continue
+	// 		}
+	// 		atLeaseOneSuccessful = true
+	// 	}
+	// 	toMigrate = failures
+	// 	if !atLeaseOneSuccessful {
+	// 		break
+	// 	}
+	// }
+	// if err != nil {
+	// 	return fmt.Errorf("automigrate blocked: %w", err)
+	// }
+
+	err = migrate(db, true)
 	if err != nil {
 		return fmt.Errorf("error when automigrating: %s", err.Error())
 	}
+	// log.Default().Println("Adding FK contraints...")
+	// err = migrate(db, false)
+	// if err != nil {
+	// 	return fmt.Errorf("error when adding foreign keys: %s", err.Error())
+	// }
 
 	var processingWg sync.WaitGroup
-	mutexedDB := &MutexedDB{db: db}
+	var scdb syncCompatibleDB
+	if f.useMutex {
+		scdb = &mutexedDB{db: db}
+	} else {
+		scdb = &unmutexedDB{db: db}
+	}
 
 	// load all the data we got
 	for feedIdInt, configEntry := range config.Contents {
@@ -321,21 +372,27 @@ func (f Fetcher) LoadDatabase(config LoaderConfig) error {
 		feedFileName := configEntry.DatabaseFileName
 		feedId := fmt.Sprintf("%d", feedIdInt+1) //add 1 to not have an empty PK field
 		processingWg.Add(1)
-		go func(feedFileName string, feedId string, mutexedDB *MutexedDB, configEntry LoaderConfigEntry) {
+		go func(feedFileName string, feedId string, scdb syncCompatibleDB, configEntry LoaderConfigEntry) {
 			defer processingWg.Done()
-			err := processFeed(feedId, mutexedDB, configEntry)
+			err := processFeed(feedId, scdb, configEntry)
 			if err != nil {
 				panic(fmt.Errorf("[%s] Error while parsing feed %s : %s", configEntry.DisplayName, feedFileName, err.Error()))
 			}
 			log.Default().Printf("[%s] Done with processing!\n", configEntry.DisplayName)
-		}(feedFileName, feedId, mutexedDB, configEntry)
+		}(feedFileName, feedId, scdb, configEntry)
 	}
 
 	log.Default().Println("Waiting for file parsing to be done...")
 	processingWg.Wait()
 
 	log.Default().Println("Waiting for all the entries to be written to the DB before running optimization SQL...")
-	mutexedDB.wg.Wait()
+	scdb.wgWait()
+
+	log.Default().Println("Adding FK contraints...")
+	err = migrate(db, false)
+	if err != nil {
+		return fmt.Errorf("error when adding foreign keys: %s", err.Error())
+	}
 
 	log.Default().Println("Running optimization SQL...")
 
@@ -412,7 +469,7 @@ func shouldDownload(configEntry LoaderConfigEntry) (bool, error) {
 	return lastModifiedDuration > lastModifiedThreshold, nil
 }
 
-func processFeed(feedId string, mutexedDb *MutexedDB, configEntry LoaderConfigEntry) error {
+func processFeed(feedId string, scdb syncCompatibleDB, configEntry LoaderConfigEntry) error {
 	feedFileName := configEntry.DatabaseFileName
 	feedURL := configEntry.FeedURL
 
@@ -448,39 +505,39 @@ func processFeed(feedId string, mutexedDb *MutexedDB, configEntry LoaderConfigEn
 	if err != nil {
 		return err
 	}
-	validRouteIds, err := parseRoutes(zipFile, mutexedDb, feedId)
+	validRouteIds, err := parseRoutes(zipFile, scdb, feedId)
 	if err != nil {
 		return err
 	}
-	validTripIds, validServiceIds, err := parseTrips(zipFile, mutexedDb, feedId, validRouteIds)
+	validTripIds, validServiceIds, err := parseTrips(zipFile, scdb, feedId, validRouteIds)
 	if err != nil {
 		return err
 	}
-	calendarDates, err := parseCalendarDates(zipFile, mutexedDb, feedId, validServiceIds)
+	calendarDates, err := parseCalendarDates(zipFile, scdb, feedId, validServiceIds)
 	if err != nil {
 		return err
 	}
-	calendar, err := parseCalendar(zipFile, mutexedDb, feedId, validServiceIds)
+	calendar, err := parseCalendar(zipFile, scdb, feedId, validServiceIds)
 	if err != nil {
 		return err
 	}
-	err = calculateServiceDays(mutexedDb, calendar, calendarDates)
+	err = calculateServiceDays(scdb, calendar, calendarDates)
 	if err != nil {
 		return err
 	}
-	validStopIds, err := parseStopTimes(zipFile, mutexedDb, feedId, validTripIds)
+	validStopIds, err := parseStopTimes(zipFile, scdb, feedId, validTripIds)
 	if err != nil {
 		return err
 	}
-	err = parseStops(zipFile, mutexedDb, feedId, validStopIds)
+	err = parseStops(zipFile, scdb, feedId, validStopIds)
 	if err != nil {
 		return err
 	}
-	err = parseAgencies(zipFile, mutexedDb, feedId)
+	err = parseAgencies(zipFile, scdb, feedId)
 	if err != nil {
 		return err
 	}
-	err = parseFeed(zipFile, mutexedDb, feedId, configEntry.DisplayName)
+	err = parseFeed(zipFile, scdb, feedId, configEntry.DisplayName)
 	if err != nil {
 		return err
 	}

@@ -5,7 +5,6 @@ import (
 	"math"
 	"time"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -37,24 +36,26 @@ func NewDefaultConfig() FetcherConfig {
 
 // A Fetcher is a wrapper around a DB connection.
 type Fetcher struct {
-	db     *gorm.DB
-	Config FetcherConfig
+	useMutex bool
+	db       *gorm.DB
+	Config   FetcherConfig
 }
 
-func NewFetcher(dbFileName string, config *FetcherConfig) (*Fetcher, error) {
+func NewFetcher(dial gorm.Dialector, useMutex bool, config *FetcherConfig) (*Fetcher, error) {
 	var fetcherConfig FetcherConfig
 	if config != nil {
 		fetcherConfig = *config
 	} else {
 		fetcherConfig = NewDefaultConfig()
 	}
-	db, err := gorm.Open(sqlite.Open(dbFileName), &gorm.Config{
+	//TODO remove mutex if not required
+	db, err := gorm.Open(dial, &gorm.Config{
 		CreateBatchSize: 1000,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error while opening DB: %s", err.Error())
 	}
-	return &Fetcher{db: db, Config: fetcherConfig}, nil
+	return &Fetcher{db: db, useMutex: useMutex, Config: fetcherConfig}, nil
 }
 
 // GetAllTrips fetches all the trips in the DB by batches and returns them.
@@ -109,7 +110,7 @@ func (f Fetcher) GetServicesBetweenDates(startDate time.Time, endDate time.Time)
 // GetFeededServiceIdTrips returns all trips that run on the given service
 func (f Fetcher) GetFeededServiceIdTrips(feededService FeededService) ([]Trip, error) {
 	var trips []Trip
-	err := f.db.Where("FeedId = ?", feededService.FeedId).Where("ServiceId = ?", feededService.ServiceId).Find(&trips).Error
+	err := f.db.Where("FeedId = ?", feededService.FeedId).Where("RefServiceId = ?", feededService.ServiceId).Find(&trips).Error
 	if err != nil {
 		return nil, err
 	}

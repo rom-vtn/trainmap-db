@@ -8,8 +8,8 @@ import (
 )
 
 type Agency struct {
-	FeedId         string `csv:"-" gorm:"primaryKey;index:pk_agency" json:"feed_id"`
-	AgencyId       string `gorm:"primaryKey;index:pk_agency" csv:"agency_id" json:"agency_id"`
+	FeedId         string `csv:"-" gorm:"primaryKey;uniqueIndex:pk_agency" json:"feed_id"`
+	AgencyId       string `gorm:"primaryKey;uniqueIndex:pk_agency" csv:"agency_id" json:"agency_id"`
 	AgencyName     string `csv:"agency_name" json:"name"`
 	AgencyUrl      string `csv:"agency_url"`
 	AgencyTimezone string `csv:"agency_timezone"`
@@ -32,23 +32,26 @@ const (
 )
 
 type Stop struct {
-	Feed            Feed          `csv:"-" gorm:"foreignKey:FeedId;references:FeedId" json:"feed"`
-	FeedId          string        `csv:"-" gorm:"primaryKey;index:pk_stop" json:"feed_id"`
-	StopId          string        `csv:"stop_id" gorm:"primaryKey;index:pk_stop" json:"stop_id"`
-	StopCode        string        `csv:"stop_code" json:"stop_code"`
-	StopName        string        `csv:"stop_name" json:"stop_name"`
-	TtsStopName     string        `csv:"tts_stop_name" json:"tts_stop_name"`
-	StopDesc        string        `csv:"stop_desc" json:"stop_desc"`
-	StopUrl         string        `csv:"stop_url" json:"stop_url"`
-	StopLat         float64       `csv:"-" json:"lat"`
-	StopLon         float64       `csv:"-" json:"lon"`
-	StopLatString   string        `csv:"stop_lat" json:"-"`
-	StopLonString   string        `csv:"stop_lon" json:"-"`
-	LocationType    *LocationType `csv:"location_type" json:"location_type"` // 0=Stop/platform, 1=Station, 2=Entrance/exit, 3=Generic, 4=Boarding area
-	ParentStationId string        `csv:"parent_station" json:"-"`
-	ParentStation   *Stop         `csv:"-" gorm:"foreignKey:ParentStationId,FeedId;references:StopId,FeedId" json:"parent_station"`
-	ChildStations   []Stop        `csv:"-" gorm:"foreignKey:ParentStationId,FeedId;references:StopId,FeedId" json:"child_stations"`
-	StopTimes       []StopTime    `csv:"-" gorm:"foreignKey:FeedId,StopId;references:FeedId,StopId" json:"stop_times"`
+	// Feed            Feed          `csv:"-" gorm:"foreignKey:FeedId;references:FeedId" json:"feed"`
+	Feed               Feed          `csv:"-" gorm:"foreignKey:FeedId" json:"feed"`
+	FeedId             string        `csv:"-" gorm:"primaryKey;uniqueIndex:pk_stop" json:"feed_id"`
+	StopId             string        `csv:"stop_id" gorm:"primaryKey;uniqueIndex:pk_stop" json:"stop_id"`
+	StopCode           string        `csv:"stop_code" json:"stop_code"`
+	StopName           string        `csv:"stop_name" json:"stop_name"`
+	TtsStopName        string        `csv:"tts_stop_name" json:"tts_stop_name"`
+	StopDesc           string        `csv:"stop_desc" json:"stop_desc"`
+	StopUrl            string        `csv:"stop_url" json:"stop_url"`
+	StopLat            float64       `csv:"-" json:"lat"`
+	StopLon            float64       `csv:"-" json:"lon"`
+	StopLatString      string        `csv:"stop_lat" json:"-"`
+	StopLonString      string        `csv:"stop_lon" json:"-"`
+	LocationType       *LocationType `csv:"location_type" json:"location_type"` // 0=Stop/platform, 1=Station, 2=Entrance/exit, 3=Generic, 4=Boarding area
+	CsvParentStationId string        `gorm:"-:all" csv:"parent_station" json:"-"`
+	ParentStationId    *string       `csv:"-" json:"-"`
+	//station hierarchy removed because FK constraint isn't required by the spec, TODO check for breaking changes
+	ParentStation *Stop      `csv:"-" gorm:"foreignKey:ParentStationId,FeedId;references:StopId,FeedId" json:"parent_station"`
+	ChildStations []Stop     `csv:"-" gorm:"foreignKey:ParentStationId,FeedId;references:StopId,FeedId" json:"child_stations"`
+	StopTimes     []StopTime `csv:"-" gorm:"foreignKey:FeedId,StopId;references:FeedId,StopId" json:"stop_times"`
 }
 
 func (s *Stop) parseLocation() error {
@@ -90,30 +93,34 @@ func (r RouteType) isRailType() bool {
 }
 
 type Route struct {
-	Feed           Feed      `csv:"-" gorm:"foreignKey:FeedId;references:FeedId" json:"feed"`
-	FeedId         string    `csv:"-" gorm:"primaryKey;index:pk_route" json:"feed_id"`
-	RouteId        string    `gorm:"primaryKey;index:pk_route" csv:"route_id" json:"route_id"`
+	Feed           Feed      `csv:"-" gorm:"foreignKey:FeedId" json:"feed"`
+	FeedId         string    `csv:"-" gorm:"primaryKey;uniqueIndex:pk_route" json:"feed_id"`
+	RouteId        string    `gorm:"primaryKey;uniqueIndex:pk_route" csv:"route_id" json:"route_id"`
 	RouteShortName string    `csv:"route_short_name" json:"short_name"`
 	RouteLongName  string    `csv:"route_long_name" json:"long_name"`
 	RouteDesc      string    `csv:"route_desc" json:"description"`
 	RouteType      RouteType `csv:"route_type" json:"type"` //Basically: 0=tram,1=subway,2=heavy rail, 3=Bus, other=not rail (see docs for more info)
 	RouteColor     string    `csv:"route_color" json:"color"`
 	RouteTextColor string    `csv:"route_text_color" json:"text_color"`
-	Trips          []Trip    `csv:"-" gorm:"foreignKey:FeedId,RouteId;references:FeedId,RouteId" json:"trips"`
+	Trips          []Trip    `csv:"-" gorm:"foreignKey:RefRouteId,FeedId;references:RouteId,FeedId" json:"trips"`
 }
 
 type Trip struct {
-	FeedId        string         `csv:"-" gorm:"primaryKey;index:pk_trip" json:"feed_id"`
-	TripId        string         `gorm:"primaryKey;index:pk_trip" csv:"trip_id" json:"trip_id"`
-	Feed          *Feed          `csv:"-" gorm:"foreignKey:FeedId;references:FeedId" json:"feed"`
-	RouteId       string         `csv:"route_id" json:"-"`
-	Route         *Route         `csv:"-" gorm:"foreignKey:RouteId,FeedId;references:RouteId,FeedId" json:"route"`
-	ServiceId     string         `csv:"service_id" json:"service_id"`
-	Calendar      Calendar       `csv:"-" json:"calendar" gorm:"foreignKey:FeedId,ServiceId;references:FeedId,ServiceId"`
-	CalendarDates []CalendarDate `csv:"-" json:"calendar_dates" gorm:"foreignKey:FeedId,ServiceId;references:FeedId,ServiceId"`
-	Headsign      string         `csv:"trip_headsign" json:"headsign"`
-	TripShortName string         `csv:"trip_short_name" json:"short_name"`
-	StopTimes     []StopTime     `gorm:"foreignKey:FeedId,TripId;references:FeedId,TripId" json:"stop_times" csv:"-"`
+	FeedId       string `csv:"-" gorm:"primaryKey;uniqueIndex:pk_trip" json:"feed_id"`
+	TripId       string `gorm:"primaryKey;uniqueIndex:pk_trip" csv:"trip_id" json:"trip_id"`
+	Feed         *Feed  `csv:"-" gorm:"foreignKey:FeedId" json:"feed"`
+	RefRouteId   string `csv:"route_id" json:"-"`
+	Route        *Route `csv:"-" gorm:"foreignKey:RefRouteId,FeedId;references:RouteId,FeedId" json:"route"`
+	RefServiceId string `csv:"service_id" json:"service_id"`
+	// Calendar     Calendar `csv:"-" json:"calendar" gorm:"foreignKey:FeedId,RefServiceId;references:FeedId,ServiceId"`
+	// Calendar Calendar `csv:"-" json:"calendar" gorm:"foreignKey:FeedId,ServiceId"`
+	//REMOVING THAT ONE CAUSE NOT PART OF STRICT ORM, TODO check if this breaks anything
+	// CalendarDates []CalendarDate `csv:"-" json:"calendar_dates" gorm:"foreignKey:FeedId,ServiceId;references:FeedId,ServiceId"`
+	// trying out the many to many aspect (it's fucked up afaik)
+	// CalendarDates []CalendarDate `csv:"-" json:"calendar_dates" gorm:"many2many:calendar;foreignKey:FeedId,ServiceId;references:FeedId,ServiceId"`
+	Headsign      string     `csv:"trip_headsign" json:"headsign"`
+	TripShortName string     `csv:"trip_short_name" json:"short_name"`
+	StopTimes     []StopTime `gorm:"foreignKey:FeedId,TripId;references:FeedId,TripId" json:"stop_times" csv:"-"`
 	//NOTE: no LongName is speicified in the spec
 	//Additional feeds (not part of the gtfs spec but used by our implementation)
 	MinLat float64 `gorm:"index:geo_index" json:"-" csv:"-"`
@@ -132,16 +139,16 @@ const (
 )
 
 type StopTime struct {
-	FeedId           string      `csv:"-" gorm:"primaryKey;index:pk_stoptime" json:"feed_id"`
-	TripId           string      `gorm:"primaryKey;index:pk_stoptime" csv:"trip_id" json:"trip_id"`
+	FeedId           string      `csv:"-" gorm:"primaryKey;uniqueIndex:pk_stoptime" json:"feed_id"`
+	TripId           string      `gorm:"primaryKey;uniqueIndex:pk_stoptime" csv:"trip_id" json:"trip_id"`
 	CsvArrivalTime   string      `gorm:"-:all" csv:"arrival_time" json:"-"`   //hh:mm:ss
 	CsvDepartureTime string      `gorm:"-:all" csv:"departure_time" json:"-"` //hh:mm:ss
 	ArrivalTime      time.Time   `csv:"-" json:"arrival_time"`
 	DepartureTime    time.Time   `csv:"-" json:"departure_time"`
 	StopId           string      `csv:"stop_id" json:"stop_id"`
-	Stop             *Stop       `csv:"-" gorm:"foreignKey:StopId,FeedId;references:StopId,FeedId" json:"stop"`
-	Trip             *Trip       `csv:"-" gorm:"foreignKey:TripId,FeedId;references:TripId,FeedId" json:"trip"`
-	StopSequence     uint        `gorm:"primaryKey;index:pk_stoptime" csv:"stop_sequence" json:"stop_sequence"`
+	Stop             *Stop       `csv:"-" gorm:"foreignKey:FeedId,StopId" json:"stop"`
+	Trip             *Trip       `csv:"-" gorm:"foreignKey:FeedId,TripId" json:"trip"`
+	StopSequence     uint        `gorm:"primaryKey;uniqueIndex:pk_stoptime" csv:"stop_sequence" json:"stop_sequence"`
 	StopHeadsign     string      `csv:"stop_headsign" json:"stop_headsign"`
 	PickupType       ServiceType `csv:"pickup_type" json:"pickup_type"`
 	DropOffType      ServiceType `csv:"pickup_type" json:"dorp_off_type"`
@@ -211,20 +218,20 @@ func (st *StopTime) convertTimes() error {
 }
 
 type Calendar struct {
-	FeedId        string         `gorm:"primaryKey;index:pk_calendar" json:"feed_id"`
-	ServiceId     string         `gorm:"primaryKey;index:pk_calendar" csv:"service_id" json:"service_id"`
-	Monday        bool           `csv:"monday" json:"monday"`
-	Tuesday       bool           `csv:"tuesday" json:"tuesday"`
-	Wednesday     bool           `csv:"wednesday" json:"wednesday"`
-	Thursday      bool           `csv:"thursday" json:"thursday"`
-	Friday        bool           `csv:"friday" json:"friday"`
-	Saturday      bool           `csv:"saturday" json:"saturday"`
-	Sunday        bool           `csv:"sunday" json:"sunday"`
-	CsvStartDate  string         `gorm:"-:all" csv:"start_date" json:"-"` //YYYYmmdd
-	CsvEndDate    string         `gorm:"-:all" csv:"end_date" json:"-"`   //YYYYmmdd
-	StartDate     time.Time      `json:"start_date"`
-	EndDate       time.Time      `json:"end_date"`
-	CalendarDates []CalendarDate `gorm:"foreignKey:FeedId,ServiceId;references:FeedId,ServiceId"`
+	FeedId       string    `gorm:"primaryKey;uniqueIndex:pk_calendar" json:"feed_id"`
+	ServiceId    string    `gorm:"primaryKey;uniqueIndex:pk_calendar" csv:"service_id" json:"service_id"`
+	Monday       bool      `csv:"monday" json:"monday"`
+	Tuesday      bool      `csv:"tuesday" json:"tuesday"`
+	Wednesday    bool      `csv:"wednesday" json:"wednesday"`
+	Thursday     bool      `csv:"thursday" json:"thursday"`
+	Friday       bool      `csv:"friday" json:"friday"`
+	Saturday     bool      `csv:"saturday" json:"saturday"`
+	Sunday       bool      `csv:"sunday" json:"sunday"`
+	CsvStartDate string    `gorm:"-:all" csv:"start_date" json:"-"` //YYYYmmdd
+	CsvEndDate   string    `gorm:"-:all" csv:"end_date" json:"-"`   //YYYYmmdd
+	StartDate    time.Time `json:"start_date"`
+	EndDate      time.Time `json:"end_date"`
+	// CalendarDates []CalendarDate `gorm:"foreignKey:FeedId,ServiceId;references:FeedId,ServiceId"`
 }
 
 func (Calendar) TableName() string {
@@ -259,17 +266,17 @@ const (
 )
 
 type CalendarDate struct {
-	FeedId        string        `csv:"-" gorm:"primaryKey;index:pk_calendardate" json:"feed_id"`
-	ServiceId     string        `gorm:"primaryKey;index:pk_calendardate" csv:"service_id" json:"service_id"`
-	Date          time.Time     `csv:"-" gorm:"primaryKey;index:pk_calendardate" json:"date"`
+	FeedId        string        `csv:"-" gorm:"primaryKey;uniqueIndex:pk_calendardate" json:"feed_id"`
+	ServiceId     string        `gorm:"primaryKey;uniqueIndex:pk_calendardate" csv:"service_id" json:"service_id"`
+	Date          time.Time     `csv:"-" gorm:"primaryKey;uniqueIndex:pk_calendardate" json:"date"`
 	CsvDate       string        `csv:"date" gorm:"-:all" json:"-"`           //YYYYmmdd
 	ExceptionType ExceptionType `csv:"exception_type" json:"exception_type"` //1=added, 2=removed
 }
 
 type ServiceDay struct {
-	Date      time.Time `gorm:"primaryKey;index:pk_servicedays"`
-	FeedId    string    `gorm:"primaryKey;index:pk_servicedays"`
-	ServiceId string    `gorm:"primaryKey;index:pk_servicedays"`
+	Date      time.Time `gorm:"primaryKey;uniqueIndex:pk_servicedays"`
+	FeedId    string    `gorm:"primaryKey;uniqueIndex:pk_servicedays"`
+	ServiceId string    `gorm:"primaryKey;uniqueIndex:pk_servicedays"`
 }
 
 func (s ServiceDay) GetFeededService() FeededService {
@@ -281,7 +288,7 @@ func (s ServiceDay) GetFeededService() FeededService {
 
 type Feed struct {
 	DisplayName   string `csv:"-" json:"display_name"` //added by us
-	FeedId        string `csv:"-" gorm:"primaryKey;index:pk_feed" json:"feed_id"`
+	FeedId        string `csv:"-" gorm:"primaryKey;uniqueIndex:pk_feed" json:"feed_id"`
 	PublisherName string `csv:"feed_publisher_name" json:"publisher_name"`
 	PublisherUrl  string `csv:"feed_publisher_url" json:"publisher_url"`
 	FeedLang      string `csv:"feed_lang" json:"feed_lang"`

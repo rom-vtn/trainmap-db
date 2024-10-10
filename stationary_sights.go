@@ -204,7 +204,7 @@ func (f *Fetcher) getPossibleTrainSight(nm *NetworkMap, obsPoint Point, trip Tri
 						return TrainSight{}, false, err
 					}
 					return TrainSight{
-						ServiceId:   trip.ServiceId,
+						ServiceId:   trip.RefServiceId,
 						TripId:      trip.TripId,
 						FeedId:      trip.FeedId,
 						Feed:        trip.Feed,
@@ -271,7 +271,7 @@ func (f Fetcher) GetRealTrainSights(obsPoint Point, startDate Date, endDate Date
 		if !hasSight {
 			continue //skip if not a sight
 		}
-		feededService := FeededService{FeedId: possibleTrip.FeedId, ServiceId: possibleTrip.ServiceId}
+		feededService := FeededService{FeedId: possibleTrip.FeedId, ServiceId: possibleTrip.RefServiceId}
 
 		//if it is, add to our map
 		serviceToSights[feededService] = append(serviceToSights[feededService], possibleTrainSight)
