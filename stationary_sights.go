@@ -42,10 +42,11 @@ type RealTrainSight struct {
 }
 
 func (rts *RealTrainSight) updateInnerDates(tz *time.Location) {
-	ts := rts.Timestamp.In(tz)
+	ts := rts.Date.In(tz)
 	_, offSecs := ts.Zone()
 	ts = ts.Add(-time.Duration(offSecs) * time.Second)
-	rts.Timestamp = ts
+	rts.Date = ts.Truncate(24 * time.Hour)
+	rts.Timestamp = rts.Timestamp.Add(-time.Duration(offSecs) * time.Second)
 	rts.TrainSight.StBefore.updateDate(rts.Date, tz)
 	rts.TrainSight.StAfter.updateDate(rts.Date, tz)
 	rts.TrainSight.FirstSt.updateDate(rts.Date, tz)
@@ -142,81 +143,46 @@ func (st StopTime) getPassingTime(obsPoint Point, other StopTime) (time.Duration
 	return startTime.Add(partialTime).Sub(time.Unix(0, 0)), nil
 }
 
-// returns (dist(point, line(stationA, stationB)), dist(point, line(stationA, stationB)) / dist(stationA, stationB)).
-// Formula from https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points
-func (p Point) getFractionOfDistTo(pointA, pointB Point) (float64, float64) {
-	x0 := p.Lat
-	y0 := p.Lon
-	x1 := pointA.Lat
-	y1 := pointA.Lon
-	x2 := pointB.Lat
-	y2 := pointB.Lon
-
-	fractionTopSide := math.Abs((x2-x1)*(y0-y1) - (x0-x1)*(y2-y1))
-	stationDistSquare := (y2-y1)*(y2-y1) + (x2-x1)*(x2-x1) //dist squared, divide once by dist for formula, then second time for proportion
-	stationDist := math.Sqrt(stationDistSquare)
-	//first value is "absolute" dist in degrees, second is percentage of dist between stations
-	return fractionTopSide / stationDist, fractionTopSide / stationDistSquare
-}
-
 // Checks if the trip in question is a sight at the coords given.
-func (f *Fetcher) getPossibleTrainSight(nm *NetworkMap, obsPoint Point, trip Trip) (sight TrainSight, hasSight bool, err error) {
+func (f *Fetcher) getPossibleTrainSight(obsPoint Point, trip Trip) (sight TrainSight, hasSight bool, err error) {
 	// first, exclude all routes that aren't rail (looking at you buses)
 	if !trip.Route.RouteType.isRailType() {
 		return TrainSight{}, false, nil
 	}
 
 	var stBefore StopTime
-	segments := trip.getSegments()
 	for i, stopTime := range trip.StopTimes {
 		hasCloseStop := stopTime.Stop.GetPoint().getDistTo(obsPoint) < f.Config.CloseHeavyRailStationThreshold
 		// if not first, check diffs
 		if i != 0 {
-			//compute segments
-			currentSegment := segments[i-1]
-			trajectory, err := nm.decomposeTripSegment(currentSegment)
-			if err != nil {
-				return TrainSight{}, false, err
-			}
-			//normalize travel time
-			var trajectoryTotalTime time.Duration
-			for _, seg := range trajectory {
-				trajectoryTotalTime += seg.travelTime
-			}
 			//handle source once if we're at the very start
-			hasCloseStop = hasCloseStop || trajectory[0].source.GetPoint().getDistTo(obsPoint) < f.Config.CloseHeavyRailStationThreshold
-			for i, seg := range trajectory {
-				if trajectoryTotalTime == 0 {
-					trajectory[i].travelTime = 0
-				} else {
-					trajectory[i].travelTime = (seg.travelTime * currentSegment.travelTime) / trajectoryTotalTime
+			hasCloseStop = hasCloseStop || trip.StopTimes[0].Stop.GetPoint().getDistTo(obsPoint) < f.Config.CloseHeavyRailStationThreshold
+			startPoint := stBefore.Stop.GetPoint()
+			endPoint := stopTime.Stop.GetPoint()
+			startBearing := startPoint.GetBearingFrom(obsPoint)
+			endBearing := endPoint.GetBearingFrom(obsPoint)
+			// min threshold (be gracious for now)
+			hasCloseStop = hasCloseStop || stopTime.Stop.GetPoint().getDistTo(obsPoint) < f.Config.CloseHeavyRailStationThreshold
+			hasBearing := !endBearing.isDiffLessThan(startBearing, f.Config.BearingMaxThreshold)
+			if hasBearing || hasCloseStop {
+				passingTime, err := stBefore.getPassingTime(obsPoint, stopTime)
+				if err != nil {
+					return TrainSight{}, false, err
 				}
-				startPoint := seg.source.GetPoint()
-				endPoint := seg.target.GetPoint()
-				startBearing := startPoint.GetBearingFrom(obsPoint)
-				endBearing := endPoint.GetBearingFrom(obsPoint)
-				// min threshold (be gracious for now)
-				hasCloseStop = hasCloseStop || seg.target.GetPoint().getDistTo(obsPoint) < f.Config.CloseHeavyRailStationThreshold
-				hasBearing := !endBearing.isDiffLessThan(startBearing, f.Config.BearingMaxThreshold)
-				if hasBearing || hasCloseStop {
-					passingTime, err := stBefore.getPassingTime(obsPoint, stopTime)
-					if err != nil {
-						return TrainSight{}, false, err
-					}
-					return TrainSight{
-						ServiceId:   trip.RefServiceId,
-						TripId:      trip.TripId,
-						FeedId:      trip.FeedId,
-						Feed:        trip.Feed,
-						StBefore:    stBefore,
-						StAfter:     stopTime,
-						FirstSt:     trip.StopTimes[0],
-						LastSt:      trip.StopTimes[len(trip.StopTimes)-1],
-						Trip:        trip,
-						RouteName:   trip.Route.RouteShortName,
-						passingTime: passingTime,
-					}, true, nil
+				ts := TrainSight{
+					ServiceId:   trip.RefServiceId,
+					TripId:      trip.TripId,
+					FeedId:      trip.FeedId,
+					Feed:        trip.Feed,
+					StBefore:    stBefore,
+					StAfter:     stopTime,
+					FirstSt:     trip.StopTimes[0],
+					LastSt:      trip.StopTimes[len(trip.StopTimes)-1],
+					Trip:        trip,
+					RouteName:   trip.Route.RouteShortName,
+					passingTime: passingTime,
 				}
+				return ts, true, nil
 			}
 		}
 
@@ -252,19 +218,16 @@ func (f Fetcher) GetRealTrainSights(obsPoint Point, startDate Date, endDate Date
 	// need to make a map of (FeededService) --> ([]TrainSight)
 
 	//fetch all trips matching our coords
+
 	possibleTrips, err := f.GetTripsContaining(obsPoint)
 	if err != nil {
 		return nil, err
 	}
 
-	nm, err := NewNetworkMapFromTrips(possibleTrips)
-	if err != nil {
-		return nil, err
-	}
-
 	serviceToSights := make(map[FeededService][]TrainSight)
+
 	for _, possibleTrip := range possibleTrips {
-		possibleTrainSight, hasSight, err := f.getPossibleTrainSight(nm, obsPoint, possibleTrip)
+		possibleTrainSight, hasSight, err := f.getPossibleTrainSight(obsPoint, possibleTrip)
 		if err != nil {
 			return nil, err
 		}
@@ -276,7 +239,6 @@ func (f Fetcher) GetRealTrainSights(obsPoint Point, startDate Date, endDate Date
 		//if it is, add to our map
 		serviceToSights[feededService] = append(serviceToSights[feededService], possibleTrainSight)
 	}
-	fmt.Println("Done calculating trips!")
 
 	tz, err := time.LoadLocation(f.Config.TimeZone)
 	if err != nil {

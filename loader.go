@@ -209,10 +209,6 @@ func parseAgencies(zipFile *zip.Reader, scdb syncCompatibleDB, feedId string) er
 	}
 	for i := range agencies {
 		agencies[i].FeedId = feedId
-		if agencies[i].AgencyId == "" {
-			fmt.Printf("agencies[i]: %v\n", agencies[i])
-			panic("FHEUZIOJHFZEUI") //JESSE WHAT THE FUCK IS THIS
-		}
 	}
 	return addToDB(scdb, agencies)
 }
@@ -324,37 +320,11 @@ func (f Fetcher) LoadDatabase(config LoaderConfig) error {
 
 	//migrate schema
 	db := f.db
-	// var toMigrate = []any{&Feed{}, &Agency{}, &Calendar{}, &CalendarDate{}, &ServiceDay{}, &Stop{}, &Route{}, &Trip{}, &StopTime{}}
-	// for {
-	// 	atLeaseOneSuccessful := false
-	// 	fmt.Printf("toMigrate: %v\n", toMigrate)
-	// 	var failures []any
-	// 	for _, val := range toMigrate {
-	// 		err = db.AutoMigrate(val)
-	// 		if err != nil {
-	// 			failures = append(failures, val)
-	// 			continue
-	// 		}
-	// 		atLeaseOneSuccessful = true
-	// 	}
-	// 	toMigrate = failures
-	// 	if !atLeaseOneSuccessful {
-	// 		break
-	// 	}
-	// }
-	// if err != nil {
-	// 	return fmt.Errorf("automigrate blocked: %w", err)
-	// }
 
-	err = migrate(db, true)
+	err = migrate(db, !f.useMutex)
 	if err != nil {
 		return fmt.Errorf("error when automigrating: %s", err.Error())
 	}
-	// log.Default().Println("Adding FK contraints...")
-	// err = migrate(db, false)
-	// if err != nil {
-	// 	return fmt.Errorf("error when adding foreign keys: %s", err.Error())
-	// }
 
 	var processingWg sync.WaitGroup
 	var scdb syncCompatibleDB
@@ -388,10 +358,12 @@ func (f Fetcher) LoadDatabase(config LoaderConfig) error {
 	log.Default().Println("Waiting for all the entries to be written to the DB before running optimization SQL...")
 	scdb.wgWait()
 
-	log.Default().Println("Adding FK contraints...")
-	err = migrate(db, false)
-	if err != nil {
-		return fmt.Errorf("error when adding foreign keys: %s", err.Error())
+	if !f.useMutex {
+		log.Default().Println("Adding FK contraints...")
+		err = migrate(db, false)
+		if err != nil {
+			return fmt.Errorf("error when adding foreign keys: %s", err.Error())
+		}
 	}
 
 	log.Default().Println("Running optimization SQL...")
