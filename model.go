@@ -154,20 +154,25 @@ type StopTime struct {
 	DropOffType      ServiceType `csv:"pickup_type" json:"dorp_off_type"`
 }
 
-func (st *StopTime) updateDate(date time.Time, tz *time.Location) {
-	dateRepr := date.Format("2006-01-02")
-	atNoon, err := time.ParseInLocation("2006-01-02 15:04:05", dateRepr+" 12:00:00", tz)
-	date = atNoon.Add(-12 * time.Hour)
+func updateDateTz(dateFrom, timeFrom time.Time, tz *time.Location) time.Time {
+	dateRepr := dateFrom.Format(time.DateOnly)
+	timeVal := time.Hour*time.Duration(timeFrom.Hour()) +
+		time.Minute*time.Duration(timeFrom.Minute()) +
+		time.Second*time.Duration(timeFrom.Second())
+	atNoon, err := time.ParseInLocation(time.DateTime, dateRepr+" 12:00:00", tz)
 	if err != nil {
 		panic("we should never get a time parsing failure")
 	}
+	newDate := atNoon.Add(-12 * time.Hour)
+	return newDate.Add(timeVal)
+}
+
+func (st *StopTime) updateDate(date time.Time, tz *time.Location) {
 	if !st.ArrivalTime.IsZero() {
-		newTime := date.Add(st.ArrivalTime.Sub(time.Unix(0, 0)))
-		st.ArrivalTime = newTime
+		st.ArrivalTime = updateDateTz(date, st.ArrivalTime, tz)
 	}
 	if !st.DepartureTime.IsZero() {
-		newTime := date.Add(st.DepartureTime.Sub(time.Unix(0, 0)))
-		st.DepartureTime = newTime
+		st.DepartureTime = updateDateTz(date, st.DepartureTime, tz)
 	}
 }
 

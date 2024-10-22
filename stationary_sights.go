@@ -42,18 +42,19 @@ type RealTrainSight struct {
 }
 
 func (rts *RealTrainSight) updateInnerDates(tz *time.Location) {
-	ts := rts.Date.In(tz)
-	_, offSecs := ts.Zone()
-	ts = ts.Add(-time.Duration(offSecs) * time.Second)
-	rts.Date = ts.Truncate(24 * time.Hour)
+	_, offSecs := rts.Timestamp.In(tz).Zone()
 	rts.Timestamp = rts.Timestamp.In(tz).Add(-time.Duration(offSecs) * time.Second)
 	rts.TrainSight.StBefore.updateDate(rts.Date, tz)
 	rts.TrainSight.StAfter.updateDate(rts.Date, tz)
 	rts.TrainSight.FirstSt.updateDate(rts.Date, tz)
 	rts.TrainSight.LastSt.updateDate(rts.Date, tz)
-	for i := range rts.TrainSight.Trip.StopTimes {
-		rts.TrainSight.Trip.StopTimes[i].updateDate(rts.Date, tz)
+	newTripStopTimes := make([]StopTime, 0, len(rts.TrainSight.Trip.StopTimes))
+	for _, st := range rts.TrainSight.Trip.StopTimes {
+		st.updateDate(rts.Date, tz)
+		newTripStopTimes = append(newTripStopTimes, st)
 	}
+	rts.TrainSight.Trip.StopTimes = newTripStopTimes
+	rts.Date = updateDateTz(rts.Timestamp, time.Time{}, tz)
 }
 
 // returns (day before start date 00:00, start date + dayCount 00:00). Start date is the date of startDateTime if nonzero, today otherwise
