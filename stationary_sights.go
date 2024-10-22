@@ -46,7 +46,7 @@ func (rts *RealTrainSight) updateInnerDates(tz *time.Location) {
 	_, offSecs := ts.Zone()
 	ts = ts.Add(-time.Duration(offSecs) * time.Second)
 	rts.Date = ts.Truncate(24 * time.Hour)
-	rts.Timestamp = rts.Timestamp.Add(-time.Duration(offSecs) * time.Second)
+	rts.Timestamp = rts.Timestamp.In(tz).Add(-time.Duration(offSecs) * time.Second)
 	rts.TrainSight.StBefore.updateDate(rts.Date, tz)
 	rts.TrainSight.StAfter.updateDate(rts.Date, tz)
 	rts.TrainSight.FirstSt.updateDate(rts.Date, tz)
