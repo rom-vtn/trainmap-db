@@ -106,16 +106,16 @@ type Route struct {
 }
 
 type Trip struct {
-	FeedId       string `csv:"-" gorm:"primaryKey;uniqueIndex:pk_trip" json:"feed_id"`
-	TripId       string `gorm:"primaryKey;uniqueIndex:pk_trip" csv:"trip_id" json:"trip_id"`
-	Feed         *Feed  `csv:"-" gorm:"foreignKey:FeedId" json:"feed"`
-	RefRouteId   string `csv:"route_id" json:"-"`
-	Route        *Route `csv:"-" gorm:"foreignKey:RefRouteId,FeedId;references:RouteId,FeedId" json:"route"`
-	RefServiceId string `csv:"service_id" json:"service_id"`
-	// Calendar     Calendar `csv:"-" json:"calendar" gorm:"foreignKey:FeedId,RefServiceId;references:FeedId,ServiceId"`
+	FeedId       string   `csv:"-" gorm:"primaryKey;uniqueIndex:pk_trip" json:"feed_id"`
+	TripId       string   `gorm:"primaryKey;uniqueIndex:pk_trip" csv:"trip_id" json:"trip_id"`
+	Feed         *Feed    `csv:"-" gorm:"foreignKey:FeedId" json:"feed"`
+	RefRouteId   string   `csv:"route_id" json:"-"`
+	Route        *Route   `csv:"-" gorm:"foreignKey:RefRouteId,FeedId;references:RouteId,FeedId" json:"route"`
+	RefServiceId string   `csv:"service_id" json:"service_id"`
+	Calendar     Calendar `csv:"-" json:"calendar" gorm:"foreignKey:FeedId,RefServiceId;references:FeedId,ServiceId"`
 	// Calendar Calendar `csv:"-" json:"calendar" gorm:"foreignKey:FeedId,ServiceId"`
 	//REMOVING THAT ONE CAUSE NOT PART OF STRICT ORM, TODO check if this breaks anything
-	// CalendarDates []CalendarDate `csv:"-" json:"calendar_dates" gorm:"foreignKey:FeedId,ServiceId;references:FeedId,ServiceId"`
+	CalendarDates []CalendarDate `csv:"-" json:"calendar_dates" gorm:"foreignKey:FeedId,ServiceId;references:FeedId,RefServiceId"`
 	// trying out the many to many aspect (it's fucked up afaik)
 	// CalendarDates []CalendarDate `csv:"-" json:"calendar_dates" gorm:"many2many:calendar;foreignKey:FeedId,ServiceId;references:FeedId,ServiceId"`
 	Headsign      string     `csv:"trip_headsign" json:"headsign"`
@@ -223,20 +223,20 @@ func (st *StopTime) convertTimes() error {
 }
 
 type Calendar struct {
-	FeedId       string    `gorm:"primaryKey;uniqueIndex:pk_calendar" json:"feed_id"`
-	ServiceId    string    `gorm:"primaryKey;uniqueIndex:pk_calendar" csv:"service_id" json:"service_id"`
-	Monday       bool      `csv:"monday" json:"monday"`
-	Tuesday      bool      `csv:"tuesday" json:"tuesday"`
-	Wednesday    bool      `csv:"wednesday" json:"wednesday"`
-	Thursday     bool      `csv:"thursday" json:"thursday"`
-	Friday       bool      `csv:"friday" json:"friday"`
-	Saturday     bool      `csv:"saturday" json:"saturday"`
-	Sunday       bool      `csv:"sunday" json:"sunday"`
-	CsvStartDate string    `gorm:"-:all" csv:"start_date" json:"-"` //YYYYmmdd
-	CsvEndDate   string    `gorm:"-:all" csv:"end_date" json:"-"`   //YYYYmmdd
-	StartDate    time.Time `json:"start_date"`
-	EndDate      time.Time `json:"end_date"`
-	// CalendarDates []CalendarDate `gorm:"foreignKey:FeedId,ServiceId;references:FeedId,ServiceId"`
+	FeedId        string         `gorm:"primaryKey;uniqueIndex:pk_calendar" json:"feed_id"`
+	ServiceId     string         `gorm:"primaryKey;uniqueIndex:pk_calendar" csv:"service_id" json:"service_id"`
+	Monday        bool           `csv:"monday" json:"monday"`
+	Tuesday       bool           `csv:"tuesday" json:"tuesday"`
+	Wednesday     bool           `csv:"wednesday" json:"wednesday"`
+	Thursday      bool           `csv:"thursday" json:"thursday"`
+	Friday        bool           `csv:"friday" json:"friday"`
+	Saturday      bool           `csv:"saturday" json:"saturday"`
+	Sunday        bool           `csv:"sunday" json:"sunday"`
+	CsvStartDate  string         `gorm:"-:all" csv:"start_date" json:"-"` //YYYYmmdd
+	CsvEndDate    string         `gorm:"-:all" csv:"end_date" json:"-"`   //YYYYmmdd
+	StartDate     time.Time      `json:"start_date"`
+	EndDate       time.Time      `json:"end_date"`
+	CalendarDates []CalendarDate `gorm:"foreignKey:FeedId,ServiceId;references:FeedId,ServiceId"`
 }
 
 func (Calendar) TableName() string {
