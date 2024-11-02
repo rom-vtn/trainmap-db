@@ -3,12 +3,14 @@ package trainmapdb
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,7 +38,29 @@ func unmarshalCsv[T any](zipFile *zip.Reader, csvFileName string, output *[]T) e
 		content = content[3:]
 	}
 
-	return csvutil.Unmarshal(content, output)
+	tr := trimReader{csv.NewReader(bytes.NewReader(content))}
+	dec, err := csvutil.NewDecoder(&tr)
+	if err != nil {
+		return err
+	}
+	err = dec.Decode(&output)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type trimReader struct{ csvutil.Reader }
+
+func (tr *trimReader) Read() ([]string, error) {
+	content, err := tr.Reader.Read()
+	if err != nil {
+		return nil, err
+	}
+	for i, v := range content {
+		content[i] = strings.TrimSpace(v)
+	}
+	return content, nil
 }
 
 func addToDB[T any](scdb syncCompatibleDB, input []T) error {
@@ -487,10 +511,12 @@ func processFeed(feedId string, scdb syncCompatibleDB, configEntry LoaderConfigE
 	}
 	calendarDates, err := parseCalendarDates(zipFile, scdb, feedId, validServiceIds)
 	if err != nil {
+		println("IN CALENDAR DATES")
 		return err
 	}
 	calendar, err := parseCalendar(zipFile, scdb, feedId, validServiceIds)
 	if err != nil {
+		println("IN CALENDAR")
 		return err
 	}
 	err = calculateServiceDays(scdb, calendar, calendarDates)
