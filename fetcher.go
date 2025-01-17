@@ -3,6 +3,7 @@ package trainmapdb
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -188,6 +189,17 @@ func (f Fetcher) GetStop(feedId string, stopId string) (Stop, error) {
 	stop := Stop{FeedId: feedId, StopId: stopId}
 	err := f.db.Preload(clause.Associations).Preload("StopTimes.Trip").Where(&stop).First(&stop).Error
 	return stop, err
+}
+
+func (f Fetcher) GetStopsLike(name string) ([]Stop, error) {
+	var stops []Stop
+	err := f.db.
+		Preload("Feed").
+		Where("UPPER(stop_name) LIKE ?", "%"+strings.ToUpper(name)+"%").
+		Limit(20).
+		Find(&stops).
+		Error
+	return stops, err
 }
 
 // GetFeeds returns all the feed info known in the DB.

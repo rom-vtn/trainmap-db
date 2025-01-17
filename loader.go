@@ -79,9 +79,40 @@ func addToDB[T any](scdb syncCompatibleDB, input []T) error {
 	return nil
 }
 
+var maxCsvBytes int
+var usedCsvBytes int
+var csvBytesMutex sync.Mutex
+
 func readCsv[T any](zipFile *zip.Reader, csvFileName string) ([]T, error) {
+	file, err := zipFile.Open(csvFileName)
+	if err != nil {
+		return nil, err
+	}
+	stat, err := file.Stat()
+	file.Close()
+	if err != nil {
+		return nil, err
+	}
+	currentCsvBytes := int(stat.Size())
+
+	csvBytesMutex.Lock()
+	maxCsvBytes = max(maxCsvBytes, currentCsvBytes)
+	fmt.Printf("maxCsvBytes: %v\n", maxCsvBytes)
+	for usedCsvBytes+currentCsvBytes > maxCsvBytes {
+		csvBytesMutex.Unlock()
+		println("Too much memory!")
+		time.Sleep(100 * time.Millisecond)
+		csvBytesMutex.Lock()
+	}
+	usedCsvBytes += currentCsvBytes
+	defer func() {
+		csvBytesMutex.Lock()
+		defer csvBytesMutex.Unlock()
+		usedCsvBytes -= currentCsvBytes
+	}()
+	csvBytesMutex.Unlock()
 	content := []T{}
-	err := unmarshalCsv(zipFile, csvFileName, &content)
+	err = unmarshalCsv(zipFile, csvFileName, &content)
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +240,35 @@ func parseStopTimes(zipFile *zip.Reader, scdb syncCompatibleDB, feedId string, v
 	return validStopIds, addToDB(scdb, validStopTimes)
 }
 
+// Convert extended GTFS route types into simple types.
+// Used for feeds like Switzerland and Sweden.
+// See https://developers.google.com/transit/gtfs/reference/extended-route-types for detail
+func simplifyRouteType(rt RouteType) RouteType {
+	category := rt / 100 //strip the 2 last digits
+
+	//maps extended route type categories to standard GTFS route types
+	var mapping = map[RouteType]RouteType{
+		1:  2,  //rail
+		2:  3,  //bus
+		4:  1,  //subway
+		7:  3,  //bus
+		8:  11, //trolleybus
+		9:  0,  //tram
+		10: 4,  //water transit (ferry?)
+		// 11 = air transit
+		12: 4, //ferry
+		13: 6, //aerial lift
+		14: 7, //funicular
+		// 15 = taxi
+		// 17 = miscellaneous
+	}
+	newIndex, ok := mapping[category]
+	if ok {
+		return newIndex
+	}
+	return rt //return itself
+}
+
 func parseRoutes(zipFile *zip.Reader, scdb syncCompatibleDB, feedId string) (map[string]bool, error) {
 	routes, err := readCsv[Route](zipFile, "routes.txt")
 	if err != nil {
@@ -218,6 +278,7 @@ func parseRoutes(zipFile *zip.Reader, scdb syncCompatibleDB, feedId string) (map
 	validRoutes := make([]Route, 0, len(routes))
 	for i := range routes {
 		routes[i].FeedId = feedId
+		routes[i].RouteType = simplifyRouteType(routes[i].RouteType)
 		if routes[i].RouteType != RouteTypeBus {
 			validRoutes = append(validRoutes, routes[i])
 			validRouteIds[routes[i].RouteId] = true
@@ -511,12 +572,10 @@ func processFeed(feedId string, scdb syncCompatibleDB, configEntry LoaderConfigE
 	}
 	calendarDates, err := parseCalendarDates(zipFile, scdb, feedId, validServiceIds)
 	if err != nil {
-		println("IN CALENDAR DATES")
 		return err
 	}
 	calendar, err := parseCalendar(zipFile, scdb, feedId, validServiceIds)
 	if err != nil {
-		println("IN CALENDAR")
 		return err
 	}
 	err = calculateServiceDays(scdb, calendar, calendarDates)
