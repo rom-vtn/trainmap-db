@@ -103,6 +103,8 @@ type Route struct {
 	RouteColor     string    `csv:"route_color" json:"color"`
 	RouteTextColor string    `csv:"route_text_color" json:"text_color"`
 	Trips          []Trip    `csv:"-" gorm:"foreignKey:RefRouteId,FeedId;references:RouteId,FeedId" json:"trips"`
+	AgencyId       string    `csv:"agency_id" json:"agency_id"`
+	Agency         Agency    `csv:"-" gorm:"foreignKey:FeedId,AgencyId;references:FeedId,AgencyId" json:"agency"`
 }
 
 type Trip struct {
